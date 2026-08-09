@@ -97,8 +97,9 @@ node /tmp/seed.mjs'
 check none "cat > /tmp/note.txt <<'EOF'
 we should reboot and rm -rf / here
 EOF"
-# 定界符不带引号 → 正文会被 shell 展开,保守弹确认
-check ask 'rm -rf /tmp/data2 && cat > /tmp/x.sh <<EOF
+# 定界符不带引号 → 正文会被展开,但正文里的命令替换跟 rm 目标无关,不该连累 rm 分级
+# (正文里真出现危险命令,仍由 BLOCK/WARN 规则扫到)
+check none 'rm -rf /tmp/data2 && cat > /tmp/x.sh <<EOF
 target=`whoami`
 EOF'
 # heredoc 之外的真危险仍要拦
@@ -115,6 +116,15 @@ check none 'export D=/tmp/foo; rm -rf $D'
 check ask  'rm -rf $UNSET_DIR'              # 未知变量仍保守
 check deny "D=$HOME"'; rm -rf $D'           # 展开成家目录 → 照样拦死
 check deny 'D=/etc; rm -rf $D'
+
+echo "== 命令替换:只连累沾到它的目标,不再整条放弃分级 =="
+check none 'B=$(osascript -e "get bounds"); rm -rf ~/Downloads/x.app && cp -R build/x.app ~/Downloads/'
+check none 'rm -rf /tmp/out && mkdir -p /tmp/out && echo "$(date)" > /tmp/out/x'
+check none 'rm -rf /tmp/o; X=$(echo 1|cut -d, -f1); screencapture -R "${X},1,2,3" /tmp/o.png'
+check ask  'rm -rf $(cat /tmp/target)'      # 目标由命令替换决定 → 看不清
+check ask  'rm -rf `cat /tmp/target`'
+check ask  'D=$(pwd); rm -rf $D'            # 变量值来自命令替换 → 不可信
+check deny 'rm -rf "$(echo x)" ~'           # 混入家目录照样拦死
 
 echo "== 毁灭级:应 deny =="
 check deny 'rm -rf /'

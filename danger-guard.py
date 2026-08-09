@@ -225,6 +225,93 @@ def play_sound(decision):
 TEMP_ROOTS = ("/tmp", "/private/tmp")
 
 
+CMDSUB_TOKEN = "$__CMDSUB__"
+
+
+def _skip_cmdsub(cmd, i):
+    """从 `$(` 之后开始扫描,返回配对 `)` 之后的下标;不闭合返回 None。"""
+    depth = 1
+    n = len(cmd)
+    while i < n:
+        c = cmd[i]
+        if c == "'":
+            j = cmd.find("'", i + 1)
+            if j < 0:
+                return None
+            i = j + 1
+        elif c == '"':
+            i += 1
+            while i < n and cmd[i] != '"':
+                i += 2 if cmd[i] == "\\" else 1
+            if i >= n:
+                return None
+            i += 1
+        elif c == "\\":
+            i += 2
+        elif cmd.startswith("$(", i):
+            depth += 1
+            i += 2
+        elif c == "(":
+            depth += 1
+            i += 1
+        elif c == ")":
+            depth -= 1
+            i += 1
+            if depth == 0:
+                return i
+        else:
+            i += 1
+    return None
+
+
+def mask_cmd_subs(cmd):
+    """把 $(...) / `...` 整段换成占位符 $__CMDSUB__;引号或命令替换不闭合返回 None。
+
+    以前只要命令里出现过 $( 就整条放弃 rm 分级 → 一律 ask,像
+    `B=$(osascript ...); rm -rf ~/Downloads/x.app` 这种命令替换跟 rm 目标毫无关系的
+    也被误拦。换成占位符后:沾到它的赋值/rm 目标展开不出值,照旧按"目标不明"判 ask,
+    其余目标仍按真实路径分级。
+    """
+    out = []
+    i, n = 0, len(cmd)
+    in_dq = False
+    while i < n:
+        c = cmd[i]
+        if c == "\\" and i + 1 < n:
+            out.append(cmd[i:i + 2])
+            i += 2
+        elif not in_dq and c == "'":
+            j = cmd.find("'", i + 1)
+            if j < 0:
+                return None
+            out.append(cmd[i:j + 1])
+            i = j + 1
+        elif c == '"':
+            in_dq = not in_dq
+            out.append(c)
+            i += 1
+        elif c == "`":
+            j = i + 1
+            while j < n and cmd[j] != "`":
+                j += 2 if cmd[j] == "\\" else 1
+            if j >= n:
+                return None
+            out.append(CMDSUB_TOKEN)
+            i = j + 1
+        elif cmd.startswith("$(", i):
+            j = _skip_cmdsub(cmd, i + 2)
+            if j is None:
+                return None
+            out.append(CMDSUB_TOKEN)
+            i = j
+        else:
+            out.append(c)
+            i += 1
+    if in_dq:
+        return None
+    return "".join(out)
+
+
 def shell_segments(cmd):
     """按顶层 shell 分隔符切段；引号内的分隔符保留为参数内容。"""
     out, buf = [], []
@@ -328,8 +415,9 @@ def classify_rm_targets(cmd, cwd):
     同一条命令里 `DIR=/tmp/x; rm -rf $DIR` 这种字面量赋值会先展开再判定 —— 展开后按真实路径
     走同一套分级(展开成家目录照样 block),既不误拦临时目录,也不会被变量绕过。
     """
-    if "$(" in cmd or "`" in cmd:
-        return "warn"
+    cmd = mask_cmd_subs(cmd)
+    if cmd is None:
+        return "warn"   # 引号/命令替换不闭合,解析不了
 
     home = os.path.expanduser("~")
     found = False

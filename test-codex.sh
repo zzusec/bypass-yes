@@ -97,10 +97,14 @@ check PermissionRequest allow 'rm -rf /tmp/data2 && cat > /tmp/seed.mjs <<"EOF"
 const ip = `10.0.0.${i}`;
 EOF
 node /tmp/seed.mjs'                                      # heredoc 纯数据正文不影响判定
-check PermissionRequest none 'rm -rf /tmp/data2 && cat > /tmp/x.sh <<EOF
+check PermissionRequest allow 'rm -rf /tmp/data2 && cat > /tmp/x.sh <<EOF
 target=`whoami`
-EOF'                                                     # 定界符无引号 → 保守弹框
+EOF'                                                     # 正文里的命令替换与 rm 目标无关
 check PermissionRequest allow 'D=/tmp/foo; rm -rf $D'    # 同命令赋值展开后=普通临时目录
+check PermissionRequest allow 'B=$(osascript -e "get bounds"); rm -rf ~/Downloads/x.app && cp -R build/x.app ~/Downloads/'
+check PermissionRequest none  'rm -rf $(cat /tmp/target)'   # 目标由命令替换决定 → 看不清
+check PermissionRequest none  'D=$(pwd); rm -rf $D'         # 变量值来自命令替换 → 不可信
+check PreToolUse       deny  'rm -rf "$(echo x)" ~'         # 混入家目录照样拦死
 check PreToolUse       deny  'D=/etc; rm -rf $D'         # 展开成一级系统目录照样拦死
 check PermissionRequest deny  'rm -rf /etc'
 check PermissionRequest deny  'dd if=/dev/zero of=/dev/disk2'
