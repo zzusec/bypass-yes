@@ -185,6 +185,18 @@ bash autocompact.sh --codex-only --codex-window 272000
 
 改完要重启 `claude`（沙箱在启动时初始化）。想连网络出口一起放开就写 `"sandbox": { "enabled": false }`。
 
+### 选项 2 是「don't ask again for … commands in <目录>」= 当前会话在 auto 模式
+
+这一种跟沙箱无关：**auto 模式**由分类器逐条判断，`ssh` 到远程执行、没见过的 CLI 照样弹，`permissions.allow` 也压不住。权限模式是**每个会话**的，shift+tab 一循环就可能从 bypass 滑进 auto。
+
+```json
+"permissions": { "defaultMode": "bypassPermissions", "disableAutoMode": "disable" }
+```
+
+`install.sh --bypass` 会一起写上，shift+tab 从此不经过 auto。已经在 auto 里的旧会话，shift+tab 切回 bypass 即可。
+
+排查顺序：先看弹窗第 2 个选项的措辞——带 `allow access to tmp/` 是沙箱，带 `don't ask again for … in <目录>` 是 auto 模式，带守卫自己的中文说明才是 danger-guard 拦的。
+
 ---
 
 ## 可选：某类危险命令也不想确认

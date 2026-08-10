@@ -164,6 +164,9 @@ def slim_deny(perm):
 u = load(user_path) or {}
 perm_u = u.setdefault("permissions", {})
 perm_u["defaultMode"] = "bypassPermissions"
+# auto 模式由分类器决定是否放行,ssh 远程执行、陌生 CLI 照样弹「requires approval」。
+# 禁掉它,shift+tab 就不会误切进去。
+perm_u["disableAutoMode"] = "disable"
 u["skipDangerousModePermissionPrompt"] = True
 # 沙箱的文件隔离层跟权限模式无关:写沙箱外路径(/tmp、项目目录)仍会弹
 # 「This command requires approval / allow access to tmp/」。关掉文件层,保留网络隔离。

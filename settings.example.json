@@ -1,6 +1,7 @@
 {
   "permissions": {
     "defaultMode": "bypassPermissions",
+    "disableAutoMode": "disable",
     "deny": [
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~*)",
