@@ -69,6 +69,10 @@ check none 'rm -rf node_modules dist build'
 check none 'rm -rf ./coverage'
 check none "rm -rf $HOME/testproj/app/node_modules"
 check none 'rm -rf ~/testproj/app/build'
+check none 'rm -rf build/*'                 # 通配符:按固定父目录判级
+check none 'rm -rf node_modules/.cache/*'
+check none 'rm -rf dist/*.js'
+check none 'rm -rf /tmp/foo-*'              # 临时目录下的具名前缀
 
 echo "== 整个项目/系统路径/目标不明:应 ask =="
 check ask 'rm -rf .'                        # 当前所在目录(所在项目)
@@ -76,7 +80,8 @@ check ask 'rm -rf ..'                       # 上级目录
 check ask "rm -rf $HOME/testproj"           # 家目录直接子项(整个项目)
 check ask "rm -rf $PWD"                     # git 仓库根 = 整个项目
 check ask 'rm -rf /opt/foo/bar'             # 系统路径
-check ask 'rm -rf /tmp/*'                   # 通配符保守不放行
+check ask 'rm -rf /tmp/*'                   # 清空整个临时目录
+check ask 'rm -rf *'                        # 清空当前项目
 check ask 'rm -rf $TMPDIR/foo'              # 变量保守不放行
 check ask 'rm -rf "/tmp/$(whoami)"'         # 命令替换保守不放行
 check ask "rm -rf /tmp/a $HOME/b"           # 混合目标

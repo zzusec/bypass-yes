@@ -349,8 +349,18 @@ def rm_target_level(path, cwd, home):
     block = 根/家目录/整个用户目录/一级系统目录;
     ask   = 整个项目级(git 仓库根、家目录直接子项、当前所在目录)、系统路径、看不清的目标;
     allow = 普通目录/文件(项目内子目录、临时目录等)。"""
-    if re.search(r"[$`*?\[]", path):
-        return "ask"
+    if re.search(r"[$`]", path):
+        return "ask"            # 变量/命令替换,目标真的看不清
+    glob = re.search(r"[*?\[]", path)
+    if glob:
+        # ponytail: 通配符不展开,只按它前面的固定父目录判级。
+        # 判成 block 时降级为 ask —— 通配符没真指到那一级(rm -rf /* 交人确认而非硬拒)。
+        head = path[:glob.start()]
+        prefix, stub = head.rsplit("/", 1) if "/" in head else ("", head)
+        if prefix in TEMP_ROOTS and stub:
+            return "allow"      # /tmp/foo-* 具名前缀;/tmp/* 清空整个临时目录仍要确认
+        level = rm_target_level(prefix or "/", cwd, home)
+        return "ask" if level == "block" else level
     if path == "~":
         p = home
     elif path.startswith("~/"):
