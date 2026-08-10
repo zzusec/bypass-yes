@@ -92,8 +92,10 @@ bash test-codex.sh
 上面只验证脚本本身。要确认 **Codex 真的在调用钩子**（未 Trust 时 hooks 会静默不执行，看不出区别），跑一次端到端：
 
 ```bash
-codex exec --full-auto "执行命令 mkfs.ext4 --help 并原样报告输出"
+codex exec -s workspace-write "执行命令 mkfs.ext4 --help 并原样报告输出"
 ```
+
+> `--full-auto` 自 codex-cli 0.147.0 起已移除，等价写法是 `-s workspace-write`；非 git 目录还需加 `--skip-git-repo-check`。
 
 macOS 没有 `mkfs`，放行也无害。输出里出现下面两行即已生效：
 
