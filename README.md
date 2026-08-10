@@ -173,6 +173,20 @@ bash autocompact.sh --codex-only --codex-window 272000
 
 ---
 
+## 已经 bypass 了，还弹「This command requires approval」
+
+选项里带一句 `Yes, and allow access to tmp/ and similar commands` 的，不是权限问题，是 **Bash 沙箱的文件隔离层**：命令要写沙箱外的路径（`/tmp`、项目目录），沙箱另外要一次审批，`bypassPermissions` 管不到它。
+
+`install.sh --bypass` 会一并关掉文件隔离层，网络隔离保留：
+
+```json
+"sandbox": { "filesystem": { "disabled": true } }
+```
+
+改完要重启 `claude`（沙箱在启动时初始化）。想连网络出口一起放开就写 `"sandbox": { "enabled": false }`。
+
+---
+
 ## 可选：某类危险命令也不想确认
 
 ```bash

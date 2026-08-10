@@ -165,6 +165,9 @@ u = load(user_path) or {}
 perm_u = u.setdefault("permissions", {})
 perm_u["defaultMode"] = "bypassPermissions"
 u["skipDangerousModePermissionPrompt"] = True
+# 沙箱的文件隔离层跟权限模式无关:写沙箱外路径(/tmp、项目目录)仍会弹
+# 「This command requires approval / allow access to tmp/」。关掉文件层,保留网络隔离。
+u.setdefault("sandbox", {}).setdefault("filesystem", {})["disabled"] = True
 removed_u, deny_u = slim_deny(perm_u)
 with open(user_path, "w", encoding="utf-8") as f:
     json.dump(u, f, ensure_ascii=False, indent=2)
