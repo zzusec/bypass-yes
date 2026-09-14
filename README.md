@@ -5,22 +5,33 @@
 ## 和官方 yolo 的区别
 
 三家官方都有免确认开关——Claude `--dangerously-skip-permissions`、
-Codex `--dangerously-bypass-approvals-and-sandbox`（俗称 yolo）、CodeBuddy `-y`——
+Codex `--dangerously-bypass-approvals-and-sandbox`（俗称 yolo）、CodeBuddy `-y`。
 它们**不看命令内容，一律放行**。
 
-守卫不是替代品，是**叠在 yolo 上面的一层**（install 会把 yolo 一起开好）：
-日常命令照样放行，只拦致命的那几条。
+守卫不是替代品，是**叠在 yolo 上面的一层**（install 会把 yolo 一起开好）。
+下面这张表，上半部分两者完全一样，区别全在下半部分：
 
-| | 官方 yolo | 装上守卫 |
+| 命令 | 只开 yolo | 装上守卫 |
 |---|---|---|
-| **日常命令**<br>`ls` `npm run build` `rm -rf node_modules` | 执行 | 执行，不打扰 |
-| **危险命令**<br>`rm -rf ~/项目` `git reset --hard` `git push --force`<br>`npm publish` `curl … \| bash` `mkfs` `rm -rf /` | 执行，出事也不吭声 | **拦下 + 响铃 + 打出是哪条** |
+| **日常命令 —— 两者一样，都不打断 AI** | | |
+| `ls`、`npm run build`、`rm -rf node_modules` | 放行 | 放行 |
+| `git status`、`cat x.log`、`rm -rf dist` | 放行 | 放行 |
+| **危险命令 —— 区别在这里** | | |
+| `rm -rf ~/my-app` | 执行 → 项目没了，连提示都没有 | **拦下** + 响铃 |
+| `git reset --hard` | 执行 → 未提交改动全丢 | **拦下** + 响铃 |
+| `git push --force` | 执行 → 远程历史被改，同事拉不到代码 | **拦下** + 响铃 |
+| `curl x.sh \| bash` | 执行 → 陌生远程代码直接跑起来 | **拦下** + 响铃 |
+| `npm publish` | 执行 → 源码公网可见、版本号被占 | **拦下** + 响铃 |
+| `crontab -r` | 执行 → 定时任务整表清空 | **拦下** + 响铃 |
+| `mkfs`、`rm -rf /` | 执行 → 盘没了 | **拦下** + 响铃 |
+| **出事之后** | **静默**，你不知道发生了什么 | 终端打出是哪条、为什么 |
 
-> **yolo 管「别烦我」，守卫管「别出事」**——两个一起开，才敢让 AI 自己跑。
+> **一句话：yolo 负责「别烦我」，守卫负责「别出事」——两个一起开，才敢让 AI 自己跑。**
 
-判定上有三点：按删除目标分级（项目内子目录放行、整个项目拦下，官方 `deny` 的 `*`
-跨 `/` 匹配做不到这种粒度）；只匹配命令不匹配数据（`echo "rm -rf /"` 不拦）；
-客户端 wrapper（`zsh -c '… && eval "你的命令"'`）拆开看内层。
+守卫怎么做到「拦危险、放日常」：**按删除目标分级**（项目内子目录和 `/tmp` 放行，
+整个项目/家目录/根拦下），官方 `permissions.deny` 只有命令前缀、`*` 还跨 `/` 匹配，
+表达不出这种粒度。另外只匹配命令不匹配数据（`echo "rm -rf /"` 不拦），
+`eval` / `bash -c` 里的内容会补扫，客户端 wrapper 会拆开看内层。
 
 ---
 
