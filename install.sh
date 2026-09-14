@@ -17,7 +17,8 @@ CLAUDE_DIR="${HOME}/.claude"
 HOOKS_DIR="${CLAUDE_DIR}/hooks"
 SETTINGS="${CLAUDE_DIR}/settings.json"
 LOCAL_SETTINGS="${CLAUDE_DIR}/settings.local.json"
-SCRIPT_SRC="$(cd "$(dirname "$0")" && pwd)/danger-guard.py"
+SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_SRC="${SRC_DIR}/danger-guard.py"
 SCRIPT_DST="${HOOKS_DIR}/danger-guard.py"
 
 # 解析参数:BYPASS_MODE = ""(未定/交互问) | "yes" | "no"
@@ -39,6 +40,7 @@ done
 echo "[1/5] 复制脚本与铃声 -> ${HOOKS_DIR}"
 mkdir -p "${HOOKS_DIR}"
 cp "${SCRIPT_SRC}" "${SCRIPT_DST}"
+cp "${SRC_DIR}/core.py" "${SRC_DIR}/rules.py" "${HOOKS_DIR}/"
 # 提示音与脚本同目录(danger-guard.py 按自身路径定位 chime.wav)
 SOUND_SRC="$(cd "$(dirname "$0")" && pwd)/chime.wav"
 if [ -f "${SOUND_SRC}" ]; then
@@ -67,7 +69,7 @@ else:
 entry = {
     "matcher": "Bash",
     "hooks": [
-        {"type": "command", "command": f"/usr/bin/python3 {script_dst}"}
+        {"type": "command", "command": f"/usr/bin/python3 {script_dst}", "timeout": 60}
     ],
 }
 
@@ -104,44 +106,24 @@ if [ -z "$BYPASS_MODE" ]; then
 fi
 
 if [ "$BYPASS_MODE" = "yes" ]; then
-  /usr/bin/python3 - "$SETTINGS" "$LOCAL_SETTINGS" <<'PY'
+  /usr/bin/python3 - "$SETTINGS" "$LOCAL_SETTINGS" "$SRC_DIR" <<'PY'
 import json, os, sys
-user_path, local_path = sys.argv[1], sys.argv[2]
+user_path, local_path, src_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+sys.path.insert(0, src_dir)
+import rules
 
-# 推荐:项目内最大权限,只硬拦毁灭级删除/磁盘。
-# 其余危险(rm -rf 非根/家、git reset --hard、curl|bash 等)交给 danger-guard 响铃确认。
-# 切勿写 Bash(sudo *) / Bash(git *) 这类过宽 deny,否则日常运维会被误拦。
+# deny 条目直接来自规则库 rules.py(唯一真源),这里不重复维护第二份。
+# 只硬拦毁灭级删除/磁盘;其余危险(rm -rf 非根/家、git reset --hard、curl|bash 等)
+# 交给 danger-guard 响铃确认。切勿写 Bash(sudo *) / Bash(git *) 这类过宽 deny。
 #
 # ⚠ deny 的 * 会跨 / 匹配:"Bash(rm -rf /*)" 不是"只拦根目录",而是拦下所有绝对路径的
 # rm -rf(连 /tmp/xxx、项目内 node_modules 都拦),且 deny 优先级最高、bypassPermissions
 # 也压不住 -> 表现为 "Permission to use Bash ... has been denied"。
-# 所以这里只写精确的毁灭级形态,路径分级判断交给 danger-guard.py(见 test.sh)。
-RECOMMENDED_DENY = [
-    "Bash(rm -rf /)",
-    "Bash(rm -fr /)",
-    "Bash(rm -rf /Users)",
-    "Bash(rm -rf ~)",
-    "Bash(mkfs *)",
-    "Bash(dd if=* of=/dev/*)",
-]
-# 已知会误拦大量正常命令的过宽规则,装 bypass 时自动剔除。
-# 这些场景 danger-guard 已按目标分级处理(临时/项目内子目录放行,项目级响铃确认,
-# 根/家/整盘直接拒绝),留在 deny 里只会把 mktemp 清理、常规回滚这类操作一起硬拒,
-# 且 deny 优先级高于一切,连 bypassPermissions 都压不住 -> 表现为 "Permission ... denied"。
-OVERBROAD_DENY = {
-    "Bash(sudo *)",
-    "Bash(sudo*)",
-    "Bash(*)",
-    "Bash(rm -rf *)",
-    "Bash(rm -r *)",
-    "Bash(rm *)",
-    "Bash(rm -rf /*)",      # * 跨 / 匹配 -> 实际拦下所有绝对路径删除
-    "Bash(rm -rf ~*)",      # 同上,拦下家目录内一切删除
-    "Bash(rm -rf /Users/*)",
-    "Bash(git reset --hard *)",
-    "Bash(git clean -f *)",
-    "Bash(git push --force *)",
-}
+# 所以规则库里只写精确的毁灭级形态,路径分级判断交给 danger-guard.py(见 test.sh)。
+RECOMMENDED_DENY = list(rules.CLAUDE_DENY)
+
+# 已知会误拦大量正常命令的过宽规则,装 bypass 时自动剔除(同样来自规则库)。
+OVERBROAD_DENY = set(rules.CLAUDE_DENY_OVERBROAD)
 
 def load(p):
     if os.path.exists(p):
@@ -164,6 +146,9 @@ def slim_deny(perm):
 u = load(user_path) or {}
 perm_u = u.setdefault("permissions", {})
 perm_u["defaultMode"] = "bypassPermissions"
+# Claude Code ≥2.1 给 bypass 加了门控:不解锁会报
+# "Cannot set permission mode to bypassPermissions because it is disabled by settings"
+perm_u["allowDangerouslySkipPermissions"] = True
 # auto 模式由分类器决定是否放行,ssh 远程执行、陌生 CLI 照样弹「requires approval」。
 # 禁掉它,shift+tab 就不会误切进去。
 perm_u["disableAutoMode"] = "disable"

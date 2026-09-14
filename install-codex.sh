@@ -38,6 +38,7 @@ SCRIPT_DST="${HOOKS_DIR}/danger-guard-codex.py"
 echo "[1/5] 复制脚本与铃声 -> ${HOOKS_DIR}"
 mkdir -p "${HOOKS_DIR}" "${RULES_DIR}"
 cp "${SRC_DIR}/danger-guard-codex.py" "${SCRIPT_DST}"
+cp "${SRC_DIR}/core.py" "${SRC_DIR}/rules.py" "${HOOKS_DIR}/"
 cp "${SRC_DIR}/chime.wav" "${HOOKS_DIR}/chime.wav"
 
 echo "[2/5] 合并 PreToolUse + PermissionRequest hook -> ${HOOKS_JSON}"
@@ -81,8 +82,8 @@ with open(hooks_path, "w", encoding="utf-8") as f:
 print("      已写入 PreToolUse + PermissionRequest hook")
 PY
 
-echo "[3/5] 安装危险确认规则 -> ${RULES_DIR}/danger-guard.rules"
-cp "${SRC_DIR}/danger-guard.rules" "${RULES_DIR}/danger-guard.rules"
+echo "[3/5] 生成危险确认规则 -> ${RULES_DIR}/danger-guard.rules"
+/usr/bin/python3 "${SRC_DIR}/gen_codex_rules.py" "${RULES_DIR}/danger-guard.rules"
 
 echo "[4/5] 检查其他 .rules 文件的 forbidden 冲突(会压过 prompt 弹确认)"
 conflict=0

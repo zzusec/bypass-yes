@@ -1,11 +1,13 @@
 {
   "permissions": {
     "defaultMode": "bypassPermissions",
+    "allowDangerouslySkipPermissions": true,
     "disableAutoMode": "disable",
     "deny": [
-      "Bash(rm -rf /*)",
-      "Bash(rm -rf ~*)",
-      "Bash(rm -rf /Users/*)",
+      "Bash(rm -rf /)",
+      "Bash(rm -fr /)",
+      "Bash(rm -rf /Users)",
+      "Bash(rm -rf ~)",
       "Bash(mkfs *)",
       "Bash(dd if=* of=/dev/*)"
     ]

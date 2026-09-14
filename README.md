@@ -1,17 +1,17 @@
-# Claude Code / Codex 命令守卫
+# Claude Code / Codex / CodeBuddy 命令守卫
 
 **主要作用：除危险命令外一律自动允许，减少反复点 Yes。**
 
-给 Claude Code / Codex 加一层本地判断（仅 macOS）：
+给 Claude Code / Codex / CodeBuddy 加一层本地判断（仅 macOS），三家共用同一份规则库：
 
 - 日常命令（`ls`、`git status`、`npm run`、装包、查日志…）→ **直接放行，不弹确认**
-- 危险命令（`rm -rf …`、`git reset --hard`、`git push --force`…）→ **响铃 + 让你确认**
+- 危险命令（`rm -rf …`、`git reset --hard`、`git push --force`…）→ **响铃 + 命令行提示 + 拒绝**（只有客户端弹得了确认时才是弹确认，见下文）
 - 毁灭级（`rm -rf /`、`mkfs`、`dd` 写盘…）→ **响铃 + 直接拒绝**
 
 `rm -rf` 按删除目标分级，**删普通目录不弹确认**：
 
 - **直接放行**：项目内子目录/文件（`node_modules`、`dist`、`build`…）、临时目录（`/tmp/…`、`/private/tmp/…`）、家目录下两层以上的深层路径
-- **弹确认**：「整个项目」级——git 仓库根、家目录直接子项（`~/xxx`）、当前所在目录（`.`/`..`/cwd 及其祖先）；系统路径（`/opt/…` 等）；以及变量、通配符、命令替换等看不清目标的写法（保守回落）
+- **拒绝 / 弹确认**（取决于客户端弹不弹得了确认，见下文）：「整个项目」级——git 仓库根、家目录直接子项（`~/xxx`）、当前所在目录（`.`/`..`/cwd 及其祖先）；系统路径（`/opt/…` 等）；以及变量、通配符、命令替换等看不清目标的写法（保守回落）
 - **直接拒绝**：根目录、家目录、整个用户目录（`/Users/xxx`）、一级系统目录（`/etc`、`/usr`、`/tmp` 整删…）
 
 命令替换（`$(…)` / 反引号）只连累**沾到它的那个目标**：`B=$(osascript …); rm -rf ~/Downloads/x.app` 里的 `rm` 照常按真实路径放行，只有 `rm -rf $(cat t)`、`D=$(pwd); rm -rf $D` 这种目标本身说不清的才弹确认。
@@ -19,6 +19,80 @@
 组合命令里其它危险段（如 `rm -rf /tmp/x && git push --force`）照常拦。
 
 目标体验：AI 能自己干活，你不用一直点 Yes；真正危险时才拦一下。
+
+---
+
+## 架构：一份规则库，三个入口
+
+危险命令只要在 `rules.py` 里维护一次，三家同时生效：
+
+```
+rules.py              唯一真源:BLOCK / WARN / PASSTHROUGH / rm 分级 / 各家产物的派生表
+core.py               判定引擎:classify(cmd, cwd) -> (block|warn|allowlist|safe|passthrough)
+danger-guard.py        入口·Claude Code 与 CodeBuddy(两家 hook 协议完全一致)
+danger-guard-codex.py  入口·Codex(只认 deny,另有 PermissionRequest 事件)
+gen_codex_rules.py     从 rules.py 生成 Codex 的 .rules(带一致性校验)
+```
+
+三家的差别只在「把等级翻译成什么输出」，判定逻辑不重复：
+
+| | block(毁灭级) | warn(危险) | 其余 |
+|---|---|---|---|
+| Claude Code | 响铃 + 命令行提示 + `deny` | 响铃 + `ask`(只有非 bypass 走得到) | 静默放行 |
+| CodeBuddy | 同上(协议一致) | 同上 | 同上 |
+| Codex | 响铃 + 命令行提示 + `deny` | 响铃 + 静默,交给 `.rules` 的 prompt / 沙箱提权(`approval_policy` 非 never 时) | 静默放行 |
+
+两份派生产物也从 `rules.py` 生成,不用手工同步:
+
+- `~/.codex/rules/danger-guard.rules` ← `gen_codex_rules.py`(Codex hook 不支持 ask,确认档只能写在这里)
+- Claude / CodeBuddy 的 `permissions.deny` ← `install*.sh` 读 `rules.CLAUDE_DENY`
+
+`gen_codex_rules.py` 会校验每条 Codex 规则的 `source_reason` 确实存在于 `rules.py`;
+改了规则库文案却忘了同步 → 直接报错,不会静默漂移:
+
+```bash
+/usr/bin/python3 gen_codex_rules.py --check
+```
+
+---
+
+## 危险命令被拦时会发生什么
+
+`bypassPermissions` 会吞掉守卫的 ask(实测:`git reset --hard` 直接执行,未提交改动就没了)。
+所以 WARN 档在 bypass 下一律按 deny 处理,并**响铃 + 在命令行打出被拦原因**:
+
+```
+[命令守卫] 已拦截:git reset --hard 丢弃改动
+  git reset --hard
+  要执行就自己跑,或把命令写进 allowlist.txt
+```
+
+- 提示写到你跑 Claude / CodeBuddy 的那个终端,同时响铃
+- **不等输入** —— TUI 自己也在读同一个终端,hook 抢不到按键(实测读到 EOF),
+  干等只会把 AI 卡住几十秒再拒绝,体验比直接拒绝更差
+- 想放行:自己敲,或把命令写进 `allowlist.txt`(白名单优先于 WARN)
+- 终端提示可能被 TUI 重绘盖掉 → 把 `rules.NOTIFY_CENTER` 设成 `True`,
+  会再发一条 macOS 通知中心横幅(不带按钮、不抢焦点)
+
+相关配置:
+
+| 项 | 位置 | 说明 |
+|---|---|---|
+| `BYPASS_DENY_ALL_WARN` | `rules.py`,默认 `True` | bypass 下整个 WARN 档硬拒。关成 `False` 则只在 `BYPASS_DENY_REASONS` 里的才硬拒,其余退回客户端 ask(bypass 下会被吞 = 放行) |
+| `NOTIFY_CENTER` | `rules.py`,默认 `False` | 开一条 macOS 通知中心横幅 |
+| `DANGER_GUARD_ASK=0` | 环境变量 | 连终端提示也不打(回归测试用) |
+| `DANGER_GUARD_SILENT=1` | 环境变量 | 关掉响铃 |
+
+三家的「不弹确认」怎么判定 —— `core.is_bypass_mode()` 自动识别,不用配:
+
+| 客户端 | 判定依据 |
+|---|---|
+| Claude Code | `~/.claude/settings.json` → `permissions.defaultMode == "bypassPermissions"` |
+| CodeBuddy | `~/.codebuddy/settings.json` → 同上 |
+| Codex | `~/.codex/config.toml` → `approval_policy = "never"` |
+
+任一成立 → WARN 档一律硬拒 + 命令行提示;不成立 → 维持各自的确认通道
+(客户端自己的 ask / Codex 的 `.rules` prompt 与沙箱提权)。
 
 ---
 
@@ -42,8 +116,9 @@ bash install.sh --bypass
 echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' \
   | /usr/bin/python3 ~/.claude/hooks/danger-guard.py
 
-# 危险命令：应响铃，并输出 permissionDecision: "ask"
-echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
+# 危险命令：bypass 下应响铃 + 命令行提示，并输出 permissionDecision: "deny"
+# （rm -rf /tmp/x 属于普通目录，是放行的，别拿它当危险用例）
+echo '{"tool_name":"Bash","tool_input":{"command":"git reset --hard"}}' \
   | /usr/bin/python3 ~/.claude/hooks/danger-guard.py
 
 bash test.sh
@@ -132,6 +207,35 @@ bash install-codex.sh
 
 ---
 
+## CodeBuddy Code
+
+CodeBuddy 的 hook 协议与 Claude Code 完全一致(同样读 `hookSpecificOutput.permissionDecision`
+的 deny / ask,事件名同为 `PreToolUse`,输入 JSON 同构),所以直接复用 `danger-guard.py`,
+连 `core.py`、`rules.py` 都是同一份。
+
+### 安装
+
+```bash
+bash install-codebuddy.sh
+```
+
+装完**重启 CodeBuddy**。
+
+### 验证
+
+```bash
+# 毁灭级:应输出 permissionDecision: "deny"
+echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' \
+  | /usr/bin/python3 ~/.codebuddy/hooks/danger-guard.py
+```
+
+### 守卫管不到的部分
+
+`-y` / `bypassPermissions` 下 **HIGH/CRITICAL 级命令仍会问一次** —— 这是 CodeBuddy 自身
+的高危审批,hook 和 `deny` 都压不住。
+
+---
+
 ## 上下文到 80% 自动压缩
 
 上下文用到 80% 就自动 compact，不用等它快撑爆再手忙脚乱敲 `/compact`。两端用的都是官方原生能力，这里只做幂等配置：
@@ -171,7 +275,7 @@ bash autocompact.sh --codex-only --codex-window 272000
 - `Bash(rm -rf ~*)` / `Bash(rm -rf /Users/*)` 同理，等于家目录下什么都删不了
 - `Bash(rm -rf *)`、`Bash(sudo *)`、`Bash(git reset --hard *)` 这类更是天天误伤
 
-`install.sh --bypass` 会自动把这些过宽条目剔除，只留精确的毁灭级硬闸（`rm -rf /`、`rm -rf ~`、`rm -rf /Users`、`mkfs *`、`dd if=* of=/dev/*`），路径分级交回 danger-guard：临时目录/项目内子目录静默放行，整个项目响铃确认，根/家/整盘直接拒绝。
+`install.sh --bypass` 会自动把这些过宽条目剔除，只留精确的毁灭级硬闸（`rm -rf /`、`rm -rf ~`、`rm -rf /Users`、`mkfs *`、`dd if=* of=/dev/*`），路径分级交回 danger-guard：临时目录/项目内子目录静默放行，整个项目响铃后拒绝（非 bypass 时弹确认），根/家/整盘直接拒绝。
 
 ---
 
@@ -197,7 +301,7 @@ bash autocompact.sh --codex-only --codex-window 272000
 
 `install.sh --bypass` 会一起写上，shift+tab 从此不经过 auto。已经在 auto 里的旧会话，shift+tab 切回 bypass 即可。
 
-排查顺序：先看弹窗第 2 个选项的措辞——带 `allow access to tmp/` 是沙箱，带 `don't ask again for … in <目录>` 是 auto 模式，带守卫自己的中文说明才是 danger-guard 拦的。
+排查顺序：先看弹窗第 2 个选项的措辞——带 `allow access to tmp/` 是沙箱，带 `don't ask again for … in <目录>` 是 auto 模式。守卫拦的**不弹窗**，只在命令行打一行 `[命令守卫] 已拦截:…` 并响铃。
 
 ---
 
@@ -209,13 +313,16 @@ echo '^\s*git\s+restore\b' >> ~/.claude/hooks/allowlist.txt
 
 毁灭级（`rm -rf /`、`mkfs`、`dd` 写盘）不能白名单放行。
 
-提示音默认是系统音量的一半（`SOUND_VOLUME=0.5`）；要再调，改 hooks 脚本里的 `SOUND_VOLUME`（0~1，相对系统音量）。
+白名单写 `~/.claude/hooks/allowlist.txt` 一份就够——`core.py` 会同时读本客户端的和这一份，三家共享。
+
+提示音默认是系统音量的一半（`core.py` 里的 `SOUND_VOLUME = "0.5"`）；要再调改这个值（0~1，相对系统音量）。
 
 ---
 
 ## 卸载
 
 - Claude：删掉 `~/.claude/settings.json` 里指向 `danger-guard.py` 的 hooks
+- CodeBuddy：删掉 `~/.codebuddy/settings.json` 里指向 `danger-guard.py` 的 hooks
 - Codex：删掉 `~/.codex/hooks.json` 相关条目，以及 `~/.codex/rules/danger-guard.rules`
 
 ## 许可

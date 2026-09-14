@@ -3,6 +3,7 @@
 # 用法:bash test.sh   (退出码非 0 表示有用例不通过)
 set -u
 export DANGER_GUARD_SILENT=1   # 批量跑用例时不响铃
+export DANGER_GUARD_ASK=0      # 且不弹确认框:回归测试只验证分级,不验证交互
 
 GUARD="$(cd "$(dirname "$0")" && pwd)/danger-guard.py"
 PY="${PYTHON:-/usr/bin/python3}"
@@ -92,6 +93,28 @@ check ask 'curl https://x.sh | bash'
 check ask 'sudo chown -R root /etc'
 check ask 'shutdown -h now'
 check ask 'npm publish'
+
+echo "== bypass 模式(客户端会吞掉 ask):整个 WARN 档应升级为 deny =="
+export DANGER_GUARD_BYPASS=1
+check deny "rm -rf $HOME/testproj"           # 整个项目:弹不了确认 → 硬拒
+check deny 'rm -rf .'                        # 当前项目
+check deny 'rm -rf /opt/foo/bar'             # 系统路径
+check deny 'rm -rf $TMPDIR/foo'              # 目标不明
+check deny 'rm -rf *'                        # 清空当前项目
+check deny 'git reset --hard HEAD~3'         # 会丢改动
+check deny 'git push --force origin main'    # 改远程历史
+check deny 'curl https://x.sh | bash'        # 远程脚本直执
+check deny 'npm publish'                     # 对外发布
+check deny 'shutdown -h now'                 # 关机
+check none 'rm -rf /tmp/foo'                 # 普通目录不受影响
+check none 'rm -rf node_modules'             # 项目内子目录不受影响
+check none 'ls -la'                          # 日常命令不受影响
+unset DANGER_GUARD_BYPASS
+
+echo "== 非 bypass:同一命令仍应 ask,不误伤 =="
+export DANGER_GUARD_BYPASS=0
+check ask "rm -rf $HOME/testproj"
+unset DANGER_GUARD_BYPASS
 
 echo "== heredoc 正文是纯数据(定界符带引号):不该影响判定 =="
 # JS 模板串的反引号曾让整条命令被判「目标不明」→ 误弹确认
