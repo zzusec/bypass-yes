@@ -7,7 +7,6 @@
 判定分三档:
   BLOCK       不可逆毁灭 → 直接拒绝(deny)
   WARN        危险但可能合理 → 弹确认(ask / Codex 的 prompt)
-  PASSTHROUGH 交给客户端自己的静态规则(Claude 的 permissions.deny),守卫不表态
 
 另有一份 CODEX_RULES:Codex 的 hook 只认 deny、不支持 ask,「危险 → 弹确认」必须
 靠 ~/.codex/rules/*.rules 的 prefix_rule(argv 前缀匹配)表达。正则没法自动翻译成
@@ -48,16 +47,6 @@ WARN = [
     (r"\bnpm\s+publish\b",                                                      "npm publish 发布包"),
     (r"\bcrontab\b[^\n]*\s-r\b",                                                "crontab -r 清空定时任务"),
     (r"\bdocker\b[^\n]*\bprune\b[^\n]*(--volumes|--all|\s-a\b)",                "docker prune 清理(含数据卷/全部)"),
-]
-
-# PASSTHROUGH:命中后守卫不表态,交回客户端静态规则处理(Claude 的 permissions.deny)。
-# 这些命令本身不该被守卫放行,但分级由 rm_target_level 等逻辑决定,非递归的普通用法
-# 不该弹确认 —— 所以这里只拦"没被上面任何一档接住"的残留形态。
-PASSTHROUGH = [
-    r"\brm\b",
-    r"\bdd\b",
-    r"\bdiskutil\b",
-    r"\binit\s+0\b",
 ]
 
 # 被拦时除了响铃,要不要再发一条 macOS 通知中心横幅(不带按钮、不抢焦点)。

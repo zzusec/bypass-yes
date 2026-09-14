@@ -27,8 +27,8 @@
 危险命令只要在 `rules.py` 里维护一次，三家同时生效：
 
 ```
-rules.py              唯一真源:BLOCK / WARN / PASSTHROUGH / rm 分级 / 各家产物的派生表
-core.py               判定引擎:classify(cmd, cwd) -> (block|warn|allowlist|safe|passthrough)
+rules.py              唯一真源:BLOCK / WARN / rm 分级参数 / 各家产物的派生表
+core.py               判定引擎:classify(cmd, cwd) -> (block|warn|allowlist|safe)
 danger-guard.py        入口·Claude Code 与 CodeBuddy(两家 hook 协议完全一致)
 danger-guard-codex.py  入口·Codex(只认 deny,另有 PermissionRequest 事件)
 gen_codex_rules.py     从 rules.py 生成 Codex 的 .rules(带一致性校验)
@@ -93,6 +93,22 @@ gen_codex_rules.py     从 rules.py 生成 Codex 的 .rules(带一致性校验)
 
 任一成立 → WARN 档一律硬拒 + 命令行提示;不成立 → 维持各自的确认通道
 (客户端自己的 ask / Codex 的 `.rules` prompt 与沙箱提权)。
+
+---
+
+## 客户端会把命令包一层,守卫会拆开看
+
+Claude Code / CodeBuddy 的 Bash 工具真正执行的不是你写的那条命令,而是:
+
+```
+/bin/zsh -c '. <shell-snapshot> && eval "rm -rf node_modules"'
+```
+
+守卫按 `&&` 切段后,前半段引号不闭合, `shlex` 解析失败。以前这种情况整条一律保守判
+「危险」,结果**连删 `node_modules` 都被拦**。
+
+现在 `core._unwrap_rm()` 会掏出 `eval` / `sh -c` 的内层命令重新分级:内层安全就放行,
+内层真指向 `/`、`~` 照样拒绝(不会因为是 wrapper 就放松)。
 
 ---
 

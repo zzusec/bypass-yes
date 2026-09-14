@@ -75,6 +75,14 @@ check none 'rm -rf node_modules/.cache/*'
 check none 'rm -rf dist/*.js'
 check none 'rm -rf /tmp/foo-*'              # 临时目录下的具名前缀
 
+echo "== 客户端 wrapper(zsh -c '... && eval <命令>'):别被 wrapper 的语法噪音误判 =="
+# Bash 工具实际执行的是包了一层的命令,切段后引号不闭合会让整条保守判 warn,
+# 表现为连删 node_modules 都被拦 —— 这里验证内层命令会被掏出来重新分级
+check none "bash -c '. /tmp/snap.sh && eval 'rm -rf /tmp/foo''"
+check none "bash -c '. /tmp/snap.sh && eval 'rm -rf node_modules''"
+check deny "bash -c '. /tmp/snap.sh && eval 'rm -rf /''"
+check ask "bash -c '. /tmp/snap.sh && eval 'rm -rf $HOME/testproj''"
+
 echo "== 整个项目/系统路径/目标不明:应 ask =="
 check ask 'rm -rf .'                        # 当前所在目录(所在项目)
 check ask 'rm -rf ..'                       # 上级目录

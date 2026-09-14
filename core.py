@@ -12,7 +12,6 @@ level 取值:
     warn        危险但可能合理
     allowlist   命中用户白名单
     safe        正常放行
-    passthrough 交回客户端静态规则(守卫不表态)
 """
 
 import json
@@ -547,6 +546,27 @@ def is_bypass_mode():
         return False
 
 
+def _unwrap_rm(cmd, cwd, fallback):
+    """客户端把命令包成 wrapper 时,别让它的语法噪音连累 rm 分级。
+
+    Claude Code / CodeBuddy 的 Bash 工具实际执行的是:
+        /bin/zsh -c '. <shell-snapshot> && eval "rm -rf node_modules"'
+    守卫按 && 切段后,前半段引号不闭合 → shlex 解析失败 → 保守判 warn,
+    结果连删除 node_modules 都被拦。
+
+    所以掏出 eval / sh -c 的内层命令再判一次:内层 block 就 block,
+    内层全 safe 才降级为 safe,否则维持原来的保守判断。
+    """
+    level = fallback
+    for inner in extract_code(cmd):
+        lvl = classify_rm(build_scan_text(inner), inner, cwd)
+        if lvl == "block":
+            return "block"
+        if lvl == "safe":
+            level = "safe"
+    return level
+
+
 def classify(cmd, cwd=None, bypass=None):
     """命令文本 → (level, reason)。各家入口脚本按自己的协议把 level 翻译成输出。
 
@@ -572,6 +592,9 @@ def _classify(cmd, cwd=None):
     cwd = cwd or os.getcwd()
 
     rm = classify_rm(scan, core, cwd)
+    if rm == "warn":
+        rm = _unwrap_rm(cmd, cwd, rm)
+
     if rm == "block":
         return "block", rules.RM_BLOCK_REASON
 
@@ -579,7 +602,7 @@ def _classify(cmd, cwd=None):
         if re.search(pattern, scan):
             return "block", reason
 
-    # 白名单优先于 WARN/PASSTHROUGH,但 BLOCK 已先拦。按命令原文匹配。
+    # 白名单优先于 WARN,但 BLOCK 已先拦。按命令原文匹配。
     for pattern in load_user_allow():
         if re.search(pattern, cmd):
             return "allowlist", "命中白名单,放行"
@@ -591,14 +614,7 @@ def _classify(cmd, cwd=None):
         if re.search(pattern, scan):
             return "warn", reason
 
-    if rm == "safe":
-        return "safe", rules.RM_SAFE_REASON
-
-    for pattern in rules.PASSTHROUGH:
-        if re.search(pattern, scan):
-            return "passthrough", "交回客户端静态规则"
-
-    return "safe", "未命中危险规则,自动放行"
+    return "safe", rules.RM_SAFE_REASON if rm == "safe" else "未命中危险规则,自动放行"
 
 
 def get_command(data):
