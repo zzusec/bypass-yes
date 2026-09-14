@@ -59,27 +59,57 @@ else:
 
 hooks = data.setdefault("hooks", {})
 
-def entry(event):
-    return {
-        "matcher": "Bash",
-        "hooks": [
-            {"type": "command",
-             "command": f"/usr/bin/python3 {script_dst} {event}",
-             "timeout": 10}
-        ],
-    }
-
 def points_to_guard(e):
     return any("danger-guard-codex.py" in h.get("command", "") for h in e.get("hooks", []))
 
+
+def guard_index(lst):
+    """danger-guard 条目当前所在的索引(取第一个)。"""
+    for i, e in enumerate(lst):
+        if points_to_guard(e):
+            return i
+    return None
+
+
+# Codex 的 trust hash 跟 hooks.json 的内容绑定:只要命令字符串没变,就一个字节都不改
+# (含条目索引和键顺序),否则重装一次就得重新 /hooks Trust,而没 Trust 时钩子是静默
+# 不执行的 —— 看不出任何异常。所以这里是「就地更新」而不是「删掉再 append」。
+changed = False
 for event in ("PreToolUse", "PermissionRequest"):
     lst = hooks.setdefault(event, [])
-    lst[:] = [e for e in lst if not points_to_guard(e)]
-    lst.append(entry(event))
+    cmd = "/usr/bin/python3 %s %s" % (script_dst, event)
+    idx = guard_index(lst)
 
-with open(hooks_path, "w", encoding="utf-8") as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
-print("      已写入 PreToolUse + PermissionRequest hook")
+    if idx is None:
+        lst.append({"matcher": "Bash",
+                    "hooks": [{"type": "command", "command": cmd, "timeout": 10}]})
+        changed = True
+        continue
+
+    old = lst[idx]
+    h = dict((old.get("hooks") or [{}])[0])
+    for k, v in (("command", cmd), ("type", "command"), ("timeout", 10)):
+        if h.get(k) != v:
+            h[k] = v          # 已存在的键赋值不改顺序,缺失的才追加
+            changed = True
+    new = dict(old)
+    new["hooks"] = [h]
+    if new != old:
+        changed = True
+    lst[idx] = new
+
+    # 清掉历史残留的重复条目(保留上面那个索引)
+    rest = [e for i, e in enumerate(lst) if i == idx or not points_to_guard(e)]
+    if len(rest) != len(lst):
+        lst[:] = rest
+        changed = True
+
+if changed:
+    with open(hooks_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print("      已写入 PreToolUse + PermissionRequest hook")
+else:
+    print("      hooks.json 已是最新,未改动(Codex trust hash 不受影响)")
 PY
 
 echo "[3/5] 生成危险确认规则 -> ${RULES_DIR}/danger-guard.rules"
