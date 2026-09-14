@@ -2,61 +2,31 @@
 
 **yolo 让你不用点 Yes；守卫让你敢开 yolo。**
 
-三家官方的免确认开关——`claude --dangerously-skip-permissions`、
-`codex --dangerously-bypass-approvals-and-sandbox`（俗称 yolo）、`codebuddy -y`——
-解决的是同一件事：别再弹窗。但它们是**不看命令内容，一律放行**。
+## 和官方 yolo 的区别
 
-本守卫是叠在 yolo 之上的一层：yolo 照开，日常命令照样静默放行，只有危险的那几条被拦下。
+三家官方都有免确认开关：`claude --dangerously-skip-permissions`、
+`codex --dangerously-bypass-approvals-and-sandbox`（俗称 yolo）、`codebuddy -y`。
+它们**不看命令内容，一律放行**。守卫只拦其中致命的那几条：
 
-| 判定 | 例子 | 行为 |
+| 命令 | 官方 yolo | 装上守卫 |
 |---|---|---|
-| 安全 | `ls`、`npm run build`、`rm -rf node_modules` | 静默放行 |
-| 危险 | `git reset --hard`、`npm publish`、`rm -rf ~/项目` | 响铃 + 打出原因 + 拒绝 |
-| 毁灭级 | `mkfs`、`rm -rf /`、`dd` 写盘 | 响铃 + 拒绝 |
+| `ls`、`npm run build`、`rm -rf node_modules` | 执行 | 执行（不打扰） |
+| `rm -rf ~/你的项目` | 执行 — 项目没了，没提示 | **拦下** + 响铃 |
+| `git reset --hard` | 执行 — 未提交改动全丢 | **拦下** |
+| `git push --force` | 执行 — 远程历史被改 | **拦下** |
+| `curl x.sh \| bash` | 执行 — 陌生代码直接跑 | **拦下** |
+| `npm publish` | 执行 — 源码公网可见 | **拦下** |
+| `mkfs`、`rm -rf /` | 执行 — 盘没了 | **拦下** |
+| 出事之后 | 静默，你不知道发生了什么 | 终端打出是哪条、为什么 |
 
----
+**不是二选一**：守卫是叠在 yolo 上的一层，`install-all.sh` 会帮你把 yolo 一起开好。
 
-## 为什么光开 yolo 不行
+**官方的 `permissions.deny` 做不到这种粒度**——`Bash(rm -rf /*)` 的 `*` 跨 `/` 匹配，
+会把 `node_modules` 一起拦死。守卫按删除目标分级：项目内子目录和 `/tmp/…` 放行，
+整个项目、家目录、根和整盘拦下。
 
-**同一句需求「清理构建产物重新构建」，AI 把路径写错了：**
-
-```
-只开 yolo：
-  $ rm -rf ~/my-app      ← 本想删 dist
-  （执行完毕，无提示，项目没了）
-
-yolo + 守卫：
-  $ rm -rf dist          → 放行，一声不吭
-  $ rm -rf ~/my-app      → 拒绝
-  [命令守卫] 已拦截:rm -rf 删除整个项目/系统路径或目标不明
-```
-
-差别不在「拦得多」，而在**只有那一条被拦**——`rm -rf dist` 照常放行，AI 的活没被打断。
-
-| 命令 | yolo | 会怎样 | 守卫 |
-|---|---|---|---|
-| `rm -rf node_modules` / `dist` | 执行 | — | 放行 |
-| `rm -rf ~/你的项目` | 执行 | 项目没了，连提示都没有 | 拒绝 + 响铃 |
-| `git reset --hard` | 执行 | 未提交改动全丢 | 拒绝 |
-| `git push --force` | 执行 | 远程历史被改，同事拉不到代码 | 拒绝 |
-| `curl x.sh \| bash` | 执行 | 陌生远程代码直接跑 | 拒绝 |
-| `npm publish` | 执行 | 源码公网可见、版本号被占用 | 拒绝 |
-| `mkfs`、`rm -rf /` | 执行 | 盘没了 | 拒绝 |
-| 出事之后 | 静默 | 你不知道发生了什么 | 响铃 + 打出原因 |
-
-**官方的静态 deny 顶不上**：`Bash(rm -rf /*)` 的 `*` 跨 `/` 匹配，拦的不是根目录而是
-**所有绝对路径**，连 `node_modules` 一起拦死。守卫按删除目标分级才能两全：
-
-| 删除目标 | 判定 |
-|---|---|
-| 项目内子目录、`/tmp/…` | 放行 |
-| 家目录直接子项、git 仓库根、当前目录（= 整个项目） | 拒绝 |
-| `/`、`~`、`/Users/xxx`、系统路径 | 拒绝 |
-
-> **一句话：只开 yolo = 拆了刹车；yolo + 守卫 = 刹车还在，只是不用每次都踩。**
-
-判定细节：只匹配命令不匹配数据（`echo "rm -rf /"` 不拦）；`eval` / `bash -c` 里的内容会补扫；
-客户端 wrapper（`zsh -c '… && eval "你的命令"'`）会拆开看内层。
+判定上还做了三件事：只匹配命令不匹配数据（`echo "rm -rf /"` 不拦）；
+`eval` / `bash -c` 里的内容会补扫；客户端 wrapper（`zsh -c '… && eval "你的命令"'`）拆开看内层。
 
 ---
 
