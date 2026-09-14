@@ -33,17 +33,49 @@ danger-guard-codex.py  Codex 入口
 | Codex | `--dangerously-bypass-approvals-and-sandbox`（也就是 yolo）/ `approval_policy = "never"` |
 | CodeBuddy | `-y` / `bypassPermissions` |
 
-它们的共同点是：**不看命令内容，一律放行**。本守卫按命令内容分级：
+### 同一件事，两种结果
 
-| 命令 | yolo 三件套 | 本守卫 |
-|---|---|---|
-| `ls`、`npm run build`、`git status` | 执行 | 静默放行 |
-| `rm -rf node_modules` | 执行 | 静默放行（目标分级为普通目录） |
-| `rm -rf ~/你的项目` | **执行** | 拒绝 |
-| `git reset --hard` | **执行**（未提交改动直接丢） | 拒绝 |
-| `npm publish`、`crontab -r` | **执行** | 拒绝 |
-| `mkfs`、`rm -rf /` | **执行** | 拒绝 |
-| 出事时 | 静默，你不知道发生了什么 | 响铃 + 命令行打出被拦原因 |
+同一句需求「清理构建产物重新构建」，AI 把路径写错了：
+
+**只开 yolo：**
+
+```
+$ rm -rf ~/my-app          ← 本想删 dist，写成了项目根
+（执行完毕，没有任何提示，项目没了）
+```
+
+**装了守卫：**
+
+```
+$ rm -rf dist              → 放行，一声不吭
+$ rm -rf ~/my-app          → 拒绝
+
+[命令守卫] 已拦截:rm -rf 删除整个项目/系统路径或目标不明
+  rm -rf ~/my-app
+  要执行就自己跑,或把命令写进 allowlist.txt
+（同时响铃）
+```
+
+关键不在「拦得多」，而在**只有那一条危险命令被拦**——`rm -rf dist` 照常放行，AI 的活一点没被打断。
+
+### 逐条对比
+
+yolo 三件套的共同点是**不看命令内容，一律放行**；守卫按命令内容分级：
+
+| 命令 | yolo 会 | 会怎样 | 守卫 |
+|---|---|---|---|
+| `ls`、`npm run build`、`git status` | 执行 | — | 放行（不打断） |
+| `rm -rf node_modules` / `dist` | 执行 | — | 放行（目标分级为普通目录） |
+| `rm -rf ~/你的项目` | **执行** | 项目没了，连个提示都没有 | **拒绝** + 响铃 |
+| `git reset --hard` | **执行** | 未提交改动全丢 | **拒绝** |
+| `git push --force` | **执行** | 远程历史被改，同事拉不到代码 | **拒绝** |
+| `curl x.sh \| bash` | **执行** | 陌生远程代码直接跑起来 | **拒绝** |
+| `npm publish` | **执行** | 源码公网可见、版本号被永久占用 | **拒绝** |
+| `crontab -r` | **执行** | 定时任务整表清空，无备份 | **拒绝** |
+| `mkfs`、`rm -rf /` | **执行** | 盘没了 | **拒绝** |
+| 出事之后 | 静默 | 你根本不知道发生了什么 | 响铃 + 命令行打出原因 |
+
+一句话：**yolo 负责「别烦我」，守卫负责「别出事」**——两个一起开，才是既不烦也不出事。
 
 ### 守卫不是「yolo + 弹窗」——开了 yolo，弹窗就没了
 
@@ -95,11 +127,32 @@ danger-guard-codex.py  Codex 入口
 
 ## 三、安装
 
-### Claude Code
+### 三家一起装（推荐）
 
 ```bash
 git clone https://github.com/zzusec/claude-codex-bypass-yes.git
 cd claude-codex-bypass-yes
+bash install-all.sh
+```
+
+一条命令装完三家，Claude / CodeBuddy 顺带配成 bypass 模式。
+只想装守卫、不动权限模式：`bash install-all.sh --no-bypass`。
+
+### 为什么还留着三个单独的脚本
+
+三家的配置落点完全不一样，没法共用一份：
+
+| 客户端 | 配置落在哪 | 额外动作 |
+|---|---|---|
+| Claude Code | `~/.claude/settings.json`（permissions + hooks，JSON） | 无 |
+| CodeBuddy | `~/.codebuddy/settings.json`（结构同 Claude） | 无 |
+| Codex | `~/.codex/hooks.json` + `config.toml`（TOML）+ `rules/*.rules` | 必须在 `/hooks` 里 Trust 一次，否则钩子静默不执行 |
+
+不是每个人都三家都装，只装一个就跑对应的那个脚本。
+
+### Claude Code（单独装）
+
+```bash
 bash install.sh --bypass
 ```
 
@@ -107,7 +160,7 @@ bash install.sh --bypass
 关掉沙箱文件隔离层、禁掉 auto 模式，以及从规则库生成的精确 `deny`
 （只拦毁灭级，不会误伤 `/tmp` 和 `node_modules`）。
 
-### Codex CLI
+### Codex CLI（单独装）
 
 需要 Codex CLI ≥ 0.142。
 
@@ -118,7 +171,7 @@ bash install-codex.sh
 装完在 Codex 里执行 `/hooks`，把 **PreToolUse**、**PermissionRequest** 两条 danger-guard
 **Trust** 一次，然后重启。
 
-### CodeBuddy Code
+### CodeBuddy Code（单独装）
 
 ```bash
 bash install-codebuddy.sh
@@ -169,6 +222,8 @@ macOS 没有 `mkfs`，放行也无害。输出里出现 `Command blocked by PreT
 ```bash
 cd claude-codex-bypass-yes
 git pull
+bash install-all.sh             # 三家一起装的话，跑这一条就够
+# 或按需单独跑：
 bash install.sh --bypass        # Claude Code
 bash install-codex.sh           # Codex
 bash install-codebuddy.sh       # CodeBuddy
