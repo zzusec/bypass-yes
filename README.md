@@ -4,29 +4,23 @@
 
 ## 和官方 yolo 的区别
 
-三家官方都有免确认开关：`claude --dangerously-skip-permissions`、
-`codex --dangerously-bypass-approvals-and-sandbox`（俗称 yolo）、`codebuddy -y`。
-它们**不看命令内容，一律放行**。守卫只拦其中致命的那几条：
+三家官方都有免确认开关——Claude `--dangerously-skip-permissions`、
+Codex `--dangerously-bypass-approvals-and-sandbox`（俗称 yolo）、CodeBuddy `-y`——
+它们**不看命令内容，一律放行**。
 
-| 命令 | 官方 yolo | 装上守卫 |
+守卫不是替代品，是**叠在 yolo 上面的一层**（install 会把 yolo 一起开好）：
+日常命令照样放行，只拦致命的那几条。
+
+| | 官方 yolo | 装上守卫 |
 |---|---|---|
-| `ls`、`npm run build`、`rm -rf node_modules` | 执行 | 执行（不打扰） |
-| `rm -rf ~/你的项目` | 执行 — 项目没了，没提示 | **拦下** + 响铃 |
-| `git reset --hard` | 执行 — 未提交改动全丢 | **拦下** |
-| `git push --force` | 执行 — 远程历史被改 | **拦下** |
-| `curl x.sh \| bash` | 执行 — 陌生代码直接跑 | **拦下** |
-| `npm publish` | 执行 — 源码公网可见 | **拦下** |
-| `mkfs`、`rm -rf /` | 执行 — 盘没了 | **拦下** |
-| 出事之后 | 静默，你不知道发生了什么 | 终端打出是哪条、为什么 |
+| **日常命令**<br>`ls` `npm run build` `rm -rf node_modules` | 执行 | 执行，不打扰 |
+| **危险命令**<br>`rm -rf ~/项目` `git reset --hard` `git push --force`<br>`npm publish` `curl … \| bash` `mkfs` `rm -rf /` | 执行，出事也不吭声 | **拦下 + 响铃 + 打出是哪条** |
 
-**不是二选一**：守卫是叠在 yolo 上的一层，`install-all.sh` 会帮你把 yolo 一起开好。
+> **yolo 管「别烦我」，守卫管「别出事」**——两个一起开，才敢让 AI 自己跑。
 
-**官方的 `permissions.deny` 做不到这种粒度**——`Bash(rm -rf /*)` 的 `*` 跨 `/` 匹配，
-会把 `node_modules` 一起拦死。守卫按删除目标分级：项目内子目录和 `/tmp/…` 放行，
-整个项目、家目录、根和整盘拦下。
-
-判定上还做了三件事：只匹配命令不匹配数据（`echo "rm -rf /"` 不拦）；
-`eval` / `bash -c` 里的内容会补扫；客户端 wrapper（`zsh -c '… && eval "你的命令"'`）拆开看内层。
+判定上有三点：按删除目标分级（项目内子目录放行、整个项目拦下，官方 `deny` 的 `*`
+跨 `/` 匹配做不到这种粒度）；只匹配命令不匹配数据（`echo "rm -rf /"` 不拦）；
+客户端 wrapper（`zsh -c '… && eval "你的命令"'`）拆开看内层。
 
 ---
 
