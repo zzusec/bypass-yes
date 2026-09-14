@@ -74,6 +74,8 @@ check none 'rm -rf build/*'                 # 通配符:按固定父目录判级
 check none 'rm -rf node_modules/.cache/*'
 check none 'rm -rf dist/*.js'
 check none 'rm -rf /tmp/foo-*'              # 临时目录下的具名前缀
+# /tmp 下的 git 仓库(临时 clone)不该被当成「整个项目」拦下来
+mkdir -p /tmp/dg-tmp-repo/.git && check none 'rm -rf /tmp/dg-tmp-repo' && rm -rf /tmp/dg-tmp-repo
 
 echo "== 客户端 wrapper(zsh -c '... && eval <命令>'):别被 wrapper 的语法噪音误判 =="
 # Bash 工具实际执行的是包了一层的命令,切段后引号不闭合会让整条保守判 warn,
@@ -87,7 +89,8 @@ echo "== 整个项目/系统路径/目标不明:应 ask =="
 check ask 'rm -rf .'                        # 当前所在目录(所在项目)
 check ask 'rm -rf ..'                       # 上级目录
 check ask "rm -rf $HOME/testproj"           # 家目录直接子项(整个项目)
-check ask "rm -rf $PWD"                     # git 仓库根 = 整个项目
+# git 仓库根 = 整个项目(家目录下两层,才能测到 .git 分支而不是「家目录直接子项」分支)
+mkdir -p "$HOME/dg-test/proj/.git" && check ask "rm -rf $HOME/dg-test/proj" && rm -rf "$HOME/dg-test"
 check ask 'rm -rf /opt/foo/bar'             # 系统路径
 check ask 'rm -rf /tmp/*'                   # 清空整个临时目录
 check ask 'rm -rf *'                        # 清空当前项目

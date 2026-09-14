@@ -375,13 +375,20 @@ def rm_target_level(path, cwd, home):
     inside_home = p.startswith(home + "/")
     if inside_home and "/" not in p[len(home) + 1:]:
         return "warn"  # 家目录直接子项,多半是整个项目/重要目录
+
+    # 临时目录要在 .git 之前判掉:/tmp 下的一律算临时,包括临时 git clone。
+    # 否则下面的 .git 检查会把 /tmp/某个仓库 当成「整个项目」拦下来 ——
+    # 删不掉自己刚 clone 的目录,很常见也很烦。
+    if any(p.startswith(root + "/") for root in TEMP_ROOTS):
+        return "safe"
+
     try:
         if os.path.isdir(os.path.join(p, ".git")):
             return "warn"  # git 仓库根 = 整个项目
     except Exception:
         return "warn"
 
-    if inside_home or any(p.startswith(root + "/") for root in TEMP_ROOTS):
+    if inside_home:
         return "safe"
     return "warn"  # 系统路径、其他用户、外接卷等,交人确认
 
