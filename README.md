@@ -22,6 +22,56 @@
 
 ---
 
+## 为什么不直接开 yolo
+
+三家都有「一把梭」的开关：
+
+| 客户端 | 开关 |
+|---|---|
+| Claude Code | `--dangerously-skip-permissions` / `bypassPermissions` |
+| Codex | `--dangerously-bypass-approvals-and-sandbox` / `approval_policy = "never"` |
+| CodeBuddy | `-y` / `bypassPermissions` |
+
+它们的共同特点是：**不看命令内容，一律放行**。本守卫按命令内容分级：
+
+| 命令 | yolo 三件套 | 本守卫 |
+|---|---|---|
+| `ls`、`npm run build`、`git status` | 执行 | 静默放行 |
+| `rm -rf node_modules` | 执行 | 静默放行（目标分级为普通目录） |
+| `rm -rf ~/你的项目` | **执行** | 拒绝 |
+| `git reset --hard` | **执行**（未提交改动直接丢） | 拒绝 |
+| `npm publish`、`crontab -r` | **执行** | 拒绝 |
+| `mkfs`、`rm -rf /` | **执行** | 拒绝 |
+| 出事时 | 静默，你不知道发生了什么 | 响铃 + 命令行打出被拦原因 |
+
+### 守卫不是「yolo + 弹窗」——开了 yolo，弹窗就没了
+
+bypass 模式下客户端会吞掉守卫的 ask：实测 `git reset --hard` 直接执行，未提交改动就没了。
+所以在这类模式下，本项目把危险档从「弹确认」改成「拒绝 + 提示」——反正弹不出来，就别
+假装能弹。`core.is_bypass_mode()` 自动识别三家各自的写法，不用你配：
+
+| 客户端 | 「不弹确认」的判定依据 |
+|---|---|
+| Claude Code | `~/.claude/settings.json` → `permissions.defaultMode == "bypassPermissions"` |
+| CodeBuddy | `~/.codebuddy/settings.json` → 同上 |
+| Codex | `~/.codex/config.toml` → `approval_policy = "never"` |
+
+### yolo 只管权限提示，别的弹窗它管不到
+
+下面这些跟命令危不危险无关，是客户端自己的机制，纯开 yolo 照样弹。`install*.sh` 都顺手配了：
+
+| 弹窗 | 出处 | 处理 |
+|---|---|---|
+| `Yes, and allow access to tmp/ and similar commands` | Claude 的 Bash 沙箱文件隔离层 | `sandbox.filesystem.disabled = true`（网络隔离保留） |
+| `don't ask again for … commands in <目录>` | Claude 的 auto 模式分类器 | `permissions.disableAutoMode = "disable"` |
+| `Allow the chrome-devtools MCP server to run tool …` | Codex 的 MCP 工具审批 | `mcp_servers.*.default_tools_approval_mode = "approve"` |
+| HIGH/CRITICAL 级命令仍问一次 | CodeBuddy 自带的高危审批 | 无解，hook 和 `deny` 都压不住 |
+
+另外 Codex 的 `--dangerously-bypass-approvals-and-sandbox` 是**连沙箱一起关**；换成本守卫
+可以保留 `-s workspace-write` 的沙箱，只放行安全命令，安全性高一档。
+
+---
+
 ## 架构：一份规则库，三个入口
 
 危险命令只要在 `rules.py` 里维护一次，三家同时生效：
@@ -83,13 +133,8 @@ gen_codex_rules.py     从 rules.py 生成 Codex 的 .rules(带一致性校验)
 | `DANGER_GUARD_ASK=0` | 环境变量 | 连终端提示也不打(回归测试用) |
 | `DANGER_GUARD_SILENT=1` | 环境变量 | 关掉响铃 |
 
-三家的「不弹确认」怎么判定 —— `core.is_bypass_mode()` 自动识别,不用配:
-
-| 客户端 | 判定依据 |
-|---|---|
-| Claude Code | `~/.claude/settings.json` → `permissions.defaultMode == "bypassPermissions"` |
-| CodeBuddy | `~/.codebuddy/settings.json` → 同上 |
-| Codex | `~/.codex/config.toml` → `approval_policy = "never"` |
+三家的「不弹确认」由 `core.is_bypass_mode()` 自动识别，判定依据见上面
+「为什么不直接开 yolo」里的那张表。
 
 任一成立 → WARN 档一律硬拒 + 命令行提示;不成立 → 维持各自的确认通道
 (客户端自己的 ask / Codex 的 `.rules` prompt 与沙箱提权)。
