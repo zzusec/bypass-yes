@@ -39,7 +39,8 @@ cd claude-codex-bypass-yes
 bash install-all.sh          # 三家一起装；只要守卫不要 yolo 用 --no-bypass
 ```
 
-装完**重启客户端**；Codex 还要执行 `/hooks` 把两条 danger-guard **Trust** 一次，否则钩子静默不执行。
+装完**重启客户端**；Codex 还要执行 `/hooks` 把两条 danger-guard **Trust** 一次，否则钩子静默不执行
+（只需第一次——之后重装是就地更新，不会让 Trust 失效）。
 
 只装某一个就跑对应的脚本（三家配置落点不同：Claude/CodeBuddy 是 JSON settings，
 Codex 是 `hooks.json` + TOML + `.rules`）：

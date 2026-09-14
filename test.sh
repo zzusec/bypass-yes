@@ -74,6 +74,9 @@ check none 'rm -rf build/*'                 # 通配符:按固定父目录判级
 check none 'rm -rf node_modules/.cache/*'
 check none 'rm -rf dist/*.js'
 check none 'rm -rf /tmp/foo-*'              # 临时目录下的具名前缀
+# 别的命令的选项不能算到 git 头上(曾把 `git push origin main && rm -f x` 判成强推)
+check none 'git push origin main && rm -f x.txt'
+check none 'git status && rm -f out.tmp'
 # /tmp 下的 git 仓库(临时 clone)不该被当成「整个项目」拦下来
 mkdir -p /tmp/dg-tmp-repo/.git && check none 'rm -rf /tmp/dg-tmp-repo' && rm -rf /tmp/dg-tmp-repo
 

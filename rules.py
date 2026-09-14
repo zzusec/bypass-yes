@@ -41,9 +41,11 @@ WARN = [
     (r">\s*/etc/",                                                             "写入 /etc 系统文件"),
     (r"\bcurl\b[^|]*\|\s*(sudo\s+)?(ba|z)?sh\b",                               "curl 管道执行远程脚本"),
     (r"\bwget\b[^|]*\|\s*(sudo\s+)?(ba|z)?sh\b",                               "wget 管道执行远程脚本"),
-    (r"\bgit\s+push\b[^\n]*(--force\b|--force-with-lease\b|\s-f\b)",            "git 强制推送"),
-    (r"\bgit\s+reset\b[^\n]*--hard\b",                                          "git reset --hard 丢弃改动"),
-    (r"\bgit\s+clean\b[^\n]*\s-\w*f",                                           "git clean -f 删未跟踪文件"),
+    # 选项只在本命令段内找(不跨 ; && |):否则 `git push origin main && rm -f x`
+    # 里 rm 的 -f 会被算成 git push -f,误判成强制推送
+    (r"\bgit\s+push\b[^;&|\n]*(--force\b|--force-with-lease\b|\s-f\b)",         "git 强制推送"),
+    (r"\bgit\s+reset\b[^;&|\n]*--hard\b",                                       "git reset --hard 丢弃改动"),
+    (r"\bgit\s+clean\b[^;&|\n]*\s-\w*f",                                        "git clean -f 删未跟踪文件"),
     (r"\bnpm\s+publish\b",                                                      "npm publish 发布包"),
     (r"\bcrontab\b[^\n]*\s-r\b",                                                "crontab -r 清空定时任务"),
     (r"\bdocker\b[^\n]*\bprune\b[^\n]*(--volumes|--all|\s-a\b)",                "docker prune 清理(含数据卷/全部)"),
