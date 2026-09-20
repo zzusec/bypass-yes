@@ -11,11 +11,12 @@
 #     danger-guard-cursor.py  Cursor
 #     danger-guard-agy.py     agy(Antigravity CLI)
 #     danger-guard-crush.py   Crush
+#     danger-guard-copilot.py GitHub Copilot CLI
 #   opencode 不走这里:它的拦截点是 JS 插件,取证请在插件里加一行 fs.appendFileSync。
 #   Gemini CLI 和 agy 共用 ~/.gemini/hooks 目录,自动找会撞车 —— 那里请显式传入口名:
 #     danger-guard-canary.sh danger-guard-agy.py
 #   各家输出协议也不同,日志里的 decision 字段会按各自键名取:
-#     hookSpecificOutput.permissionDecision / decision / permission
+#     hookSpecificOutput.permissionDecision / permissionDecision / decision / permission
 #
 # 看证据: cat <本脚本同目录>/guard-canary.log
 # 移除:   rm 本脚本和 guard-canary.log,再重跑对应的 install-*.sh(hook 命令会改回直连 python)
@@ -30,7 +31,7 @@ GUARD=""
 if [ -n "${1:-}" ] && [ -f "$DIR/$1" ]; then
   GUARD="$DIR/$1"
 else
-  for g in danger-guard.py danger-guard-gemini.py danger-guard-cursor.py danger-guard-agy.py danger-guard-crush.py; do
+  for g in danger-guard.py danger-guard-gemini.py danger-guard-cursor.py danger-guard-agy.py danger-guard-crush.py danger-guard-copilot.py; do
     if [ -f "$DIR/$g" ]; then GUARD="$DIR/$g"; break; fi
   done
 fi
@@ -49,7 +50,7 @@ dec=$(printf '%s' "$out" | "$PY" -c 'import sys,json;d=sys.stdin.read().strip()
 if not d: print("allow(放行)")
 else:
     o=json.loads(d)
-    print(o.get("hookSpecificOutput",{}).get("permissionDecision") or o.get("decision") or o.get("permission") or "?")' 2>/dev/null)
+    print(o.get("hookSpecificOutput",{}).get("permissionDecision") or o.get("permissionDecision") or o.get("decision") or o.get("permission") or "?")' 2>/dev/null)
 
 printf '%s\t%s\t%s\n' "$(date '+%F %T')" "${dec:-?}" "$cmd" >> "$LOG"
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""危险命令判定引擎 —— 十二家共用:Claude Code / Codex / CodeBuddy / zcode / pi / Qoder /
+"""危险命令判定引擎 —— 十三家共用:Claude Code / Codex / CodeBuddy / zcode / pi / Qoder /
 Gemini / Cursor / agy / opencode / Factory droid / Crush。
 
 规则表在 rules.py(唯一真源)。本文件只做「命令文本 → 危险等级」,不关心任何一家的
@@ -12,6 +12,7 @@ Gemini / Cursor / agy / opencode / Factory droid / Crush。
     danger-guard-cursor.py Cursor(hooks.json 的 beforeShellExecution,permission deny/ask)
     danger-guard-agy.py    agy / Antigravity CLI(PreToolUse,decision deny/force_ask)
     danger-guard-crush.py  Crush(hooks.PreToolUse,decision deny;没有 ask)
+    danger-guard-copilot.py GitHub Copilot CLI(PreToolUse,平铺 permissionDecision;fail-closed)
     bypass-yes-opencode.js opencode(插件 tool.execute.before,复用 danger-guard-pi.py 桥接)
     danger-guard.py        Factory droid 也走这个(同 Claude 协议,工具名 Execute)
 
