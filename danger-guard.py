@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Claude Code / CodeBuddy / zcode 入口(PreToolUse hook)。
+"""Claude Code / CodeBuddy / zcode / Qoder 入口(PreToolUse hook)。
 
 判定逻辑在 core.py,规则在 rules.py —— 本文件只负责把等级翻译成 Claude 系协议:
   block → 响铃 + 命令行提示(core.notify_user)+ permissionDecision: deny
@@ -12,11 +12,11 @@
 注意:Claude Code(含 auto 模式)不接受 permissionDecision:"allow",会报 unsupported
 并导致 PreToolUse failed。所以放行必须是「不打印 JSON」。
 
-CodeBuddy 与 zcode 的 hook 协议与 Claude 完全一致(同样读 hookSpecificOutput
+CodeBuddy、zcode、Qoder 的 hook 协议与 Claude 完全一致(同样读 hookSpecificOutput
 .permissionDecision 的 deny/ask,事件名同为 PreToolUse,输入 JSON 同构,工具名同为 Bash),
-所以三家共用这一个入口。zcode 的运行时代码实测:hook 的 deny 永远生效,yolo 也压不住;
+所以四家共用这一个入口。zcode 的运行时代码实测:hook 的 deny 永远生效,yolo 也压不住;
 本项目把 zcode 当 bypass 处理(core.is_bypass_mode 读 setting.json 的 permission.mode),
-warn 一律硬拒,行为可预期。
+warn 一律硬拒,行为可预期。Qoder 同理(读 settings.json 的 general.defaultPermissionMode)。
 """
 
 import json

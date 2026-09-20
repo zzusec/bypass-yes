@@ -55,4 +55,4 @@ echo "  /usr/bin/python3 ${BRIDGE_DST} '{\"command\":\"rm -rf /\",\"cwd\":\"/tmp
 echo
 echo "说明:pi 没有沙箱、默认不审批命令,这层守卫就是给它补上「别出事」。"
 echo "      warn 级会弹确认框;headless(pi -p / --mode json)下弹不了框则保守硬拦。"
-echo "      想放行某类命令就写进 ~/.claude/hooks/allowlist.txt(五家共享)。"
+echo "      想放行某类命令就写进 ~/.claude/hooks/allowlist.txt(八家共享)。"

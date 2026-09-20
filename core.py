@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""危险命令判定引擎 —— Claude Code / Codex / CodeBuddy / zcode / pi 五家共用。
+"""危险命令判定引擎 —— Claude Code / Codex / CodeBuddy / zcode / pi / Qoder / Gemini / Cursor 八家共用。
 
 规则表在 rules.py(唯一真源)。本文件只做「命令文本 → 危险等级」,不关心任何一家的
 输出协议 —— 输出由各客户端的入口脚本负责:
-    danger-guard.py        Claude Code / CodeBuddy / zcode(同一套 PreToolUse hook 协议)
+    danger-guard.py        Claude Code / CodeBuddy / zcode / Qoder(同一套 PreToolUse 协议)
     danger-guard-codex.py  Codex CLI(hooks.json + .rules)
     danger-guard-pi.py     pi(被 command-guard.ts 扩展调用,输出 {level,reason})
+    danger-guard-gemini.py Gemini CLI(BeforeTool,decision deny/allow)
+    danger-guard-cursor.py Cursor(hooks.json 的 beforeShellExecution,permission deny/ask)
 
     classify(cmd, cwd) -> (level, reason)
 
@@ -25,9 +27,11 @@ import subprocess
 
 import rules
 
-# 各家对 shell 工具的命名:Claude/CodeBuddy/zcode 用 Bash,Codex 用 shell / local_shell。
-# pi 的小写 bash 由 command-guard.ts 扩展自行过滤,桥接脚本直接拿到命令文本,不走这里。
-TOOL_NAMES = ("Bash", "shell", "local_shell")
+# 各家对 shell 工具的命名:Claude/CodeBuddy/zcode/Qoder 用 Bash,Codex 用 shell / local_shell,
+# Gemini CLI 用 run_shell_command。
+# pi 的小写 bash 由 command-guard.ts 扩展自行过滤、Cursor 的 beforeShellExecution
+# 事件不带工具名(直接给 command),两者都不走这里。
+TOOL_NAMES = ("Bash", "shell", "local_shell", "run_shell_command")
 
 SOUND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chime.wav")
 SOUND_VOLUME = "0.5"  # afplay 相对系统音量的比例(0~1)
@@ -128,7 +132,7 @@ def build_scan_text(cmd):
 # ============================================================
 
 def allowlist_paths():
-    """白名单文件:脚本同目录的 allowlist.txt,以及 Claude 侧那份(五家共享放行规则)。"""
+    """白名单文件:脚本同目录的 allowlist.txt,以及 Claude 侧那份(八家共享放行规则)。"""
     here = os.path.dirname(os.path.abspath(__file__))
     return [
         os.path.join(here, "allowlist.txt"),
@@ -529,6 +533,8 @@ def is_bypass_mode():
     """客户端是否处在「不弹确认」的模式 —— 几种写法,同一个后果:
 
       Claude Code / CodeBuddy → settings.json 的 permissions.defaultMode == bypassPermissions
+      Qoder                   → settings.json 的 general.defaultPermissionMode
+                                == bypass_permissions / yolo / dont_ask
       zcode                   → setting.json(单数)的 permission.mode == "yolo"
       Codex CLI               → config.toml 的 approval_policy == "never"
 
@@ -547,10 +553,17 @@ def is_bypass_mode():
         return env not in ("0", "", "false")
     here = client_dir()
 
-    # Claude Code / CodeBuddy:settings.json(复数)permissions.defaultMode
+    # Claude Code / CodeBuddy / Qoder:同一份 settings.json(复数),键名不同
     try:
         with open(os.path.join(here, "settings.json"), encoding="utf-8") as f:
-            return json.load(f).get("permissions", {}).get("defaultMode") == "bypassPermissions"
+            data = json.load(f)
+        # Claude Code / CodeBuddy
+        if data.get("permissions", {}).get("defaultMode") == "bypassPermissions":
+            return True
+        # Qoder:dont_ask 也是「不弹确认」,同样吞 ask
+        if data.get("general", {}).get("defaultPermissionMode") in (
+                "bypass_permissions", "yolo", "dont_ask"):
+            return True
     except Exception:
         pass
 
