@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""危险命令判定引擎 —— Claude Code / Codex / CodeBuddy / zcode / pi / Qoder / Gemini / Cursor 八家共用。
+"""危险命令判定引擎 —— Claude Code / Codex / CodeBuddy / zcode / pi / Qoder / Gemini / Cursor / agy 九家共用。
 
 规则表在 rules.py(唯一真源)。本文件只做「命令文本 → 危险等级」,不关心任何一家的
 输出协议 —— 输出由各客户端的入口脚本负责:
@@ -132,7 +132,7 @@ def build_scan_text(cmd):
 # ============================================================
 
 def allowlist_paths():
-    """白名单文件:脚本同目录的 allowlist.txt,以及 Claude 侧那份(八家共享放行规则)。"""
+    """白名单文件:脚本同目录的 allowlist.txt,以及 Claude 侧那份(九家共享放行规则)。"""
     here = os.path.dirname(os.path.abspath(__file__))
     return [
         os.path.join(here, "allowlist.txt"),

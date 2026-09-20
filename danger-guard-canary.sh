@@ -9,7 +9,10 @@
 #     danger-guard.py         Claude Code / CodeBuddy / zcode / Qoder
 #     danger-guard-gemini.py  Gemini CLI
 #     danger-guard-cursor.py  Cursor
-#   三家输出协议也不同,日志里的 decision 字段会按各自键名取:
+#     danger-guard-agy.py     agy(Antigravity CLI)
+#   Gemini CLI 和 agy 共用 ~/.gemini/hooks 目录,自动找会撞车 —— 那里请显式传入口名:
+#     danger-guard-canary.sh danger-guard-agy.py
+#   各家输出协议也不同,日志里的 decision 字段会按各自键名取:
 #     hookSpecificOutput.permissionDecision / decision / permission
 #
 # 看证据: cat <本脚本同目录>/guard-canary.log
@@ -22,9 +25,13 @@ PY=/usr/bin/python3
 LOG="$DIR/guard-canary.log"
 
 GUARD=""
-for g in danger-guard.py danger-guard-gemini.py danger-guard-cursor.py; do
-  if [ -f "$DIR/$g" ]; then GUARD="$DIR/$g"; break; fi
-done
+if [ -n "${1:-}" ] && [ -f "$DIR/$1" ]; then
+  GUARD="$DIR/$1"
+else
+  for g in danger-guard.py danger-guard-gemini.py danger-guard-cursor.py danger-guard-agy.py; do
+    if [ -f "$DIR/$g" ]; then GUARD="$DIR/$g"; break; fi
+  done
+fi
 if [ -z "$GUARD" ]; then
   printf '%s\t%s\t%s\n' "$(date '+%F %T')" "no-guard" "同目录没找到守卫入口,放行" >> "$LOG"
   exit 0
@@ -33,8 +40,8 @@ fi
 input=$(cat)
 out=$(printf '%s' "$input" | "$PY" "$GUARD" 2>/dev/null)
 
-# 命令文本:Claude 系在 tool_input.command,Cursor 在顶层 command
-cmd=$(printf '%s' "$input" | "$PY" -c 'import sys,json;d=json.load(sys.stdin);print((d.get("command") or (d.get("tool_input") or {}).get("command",""))[:200])' 2>/dev/null)
+# 命令文本:Claude 系在 tool_input.command,Cursor 在顶层 command,agy 在 toolCall.args.CommandLine
+cmd=$(printf '%s' "$input" | "$PY" -c 'import sys,json;d=json.load(sys.stdin);print((d.get("command") or (d.get("tool_input") or {}).get("command") or ((d.get("toolCall") or {}).get("args") or {}).get("CommandLine") or "")[:200])' 2>/dev/null)
 # 判定:没输出=放行;有输出则按各家键名取
 dec=$(printf '%s' "$out" | "$PY" -c 'import sys,json;d=sys.stdin.read().strip()
 if not d: print("allow(放行)")

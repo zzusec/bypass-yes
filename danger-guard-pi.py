@@ -4,7 +4,7 @@
 
 pi 没有 Claude 那种「命令行 hook」,它的拦截点是 TypeScript 扩展的 tool_call 事件。
 扩展不方便内嵌整套规则,所以由它在 bash 工具执行前调用本脚本,拿回分级结果再决定
-放行 / 弹确认框 / 硬拦截。判定逻辑仍在 core.py,规则仍在 rules.py —— 八家同一份真源。
+放行 / 弹确认框 / 硬拦截。判定逻辑仍在 core.py,规则仍在 rules.py —— 九家同一份真源。
 
 调用约定(pi.exec 没有 stdin,所以走 argv):
     python3 danger-guard-pi.py '<json>'
