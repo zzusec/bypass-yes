@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""危险命令规则库 —— Claude Code / Codex / CodeBuddy / zcode / pi / Qoder / Gemini / Cursor / agy 九家共用的唯一真源。
+"""危险命令规则库 —— Claude Code / Codex / CodeBuddy / zcode / pi / Qoder / Gemini / Cursor / agy / opencode / droid / Crush 十二家共用的唯一真源。
 
-改这里就等于改九家:install.sh / install-codex.sh / install-codebuddy.sh /
+改这里就等于改十二家:install.sh / install-codex.sh / install-codebuddy.sh /
 install-zcode.sh / install-pi.sh / install-qoder.sh / install-gemini.sh /
-install-cursor.sh / install-agy.sh / gen_codex_rules.py 全部从本文件派生各自的产物
+install-cursor.sh / install-agy.sh / install-opencode.sh / install-droid.sh /
+install-crush.sh / gen_codex_rules.py 全部从本文件派生各自的产物
 (hook 判定、Codex 的 .rules、Claude 系的静态 deny)。
 
 判定分三档:

@@ -6,10 +6,12 @@
 #
 # 用法:拷到客户端的 hooks 目录,再把该家配置里的 hook 命令指向它(用绝对路径)。
 #   各家入口文件名不同,脚本会自动找:
-#     danger-guard.py         Claude Code / CodeBuddy / zcode / Qoder
+#     danger-guard.py         Claude Code / CodeBuddy / zcode / Qoder / Factory droid
 #     danger-guard-gemini.py  Gemini CLI
 #     danger-guard-cursor.py  Cursor
 #     danger-guard-agy.py     agy(Antigravity CLI)
+#     danger-guard-crush.py   Crush
+#   opencode 不走这里:它的拦截点是 JS 插件,取证请在插件里加一行 fs.appendFileSync。
 #   Gemini CLI 和 agy 共用 ~/.gemini/hooks 目录,自动找会撞车 —— 那里请显式传入口名:
 #     danger-guard-canary.sh danger-guard-agy.py
 #   各家输出协议也不同,日志里的 decision 字段会按各自键名取:
@@ -28,7 +30,7 @@ GUARD=""
 if [ -n "${1:-}" ] && [ -f "$DIR/$1" ]; then
   GUARD="$DIR/$1"
 else
-  for g in danger-guard.py danger-guard-gemini.py danger-guard-cursor.py danger-guard-agy.py; do
+  for g in danger-guard.py danger-guard-gemini.py danger-guard-cursor.py danger-guard-agy.py danger-guard-crush.py; do
     if [ -f "$DIR/$g" ]; then GUARD="$DIR/$g"; break; fi
   done
 fi

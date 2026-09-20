@@ -1,15 +1,17 @@
 # bypass-yes · 命令守卫
 
-**Claude Code / Codex / CodeBuddy / zcode / pi / Qoder / Gemini CLI / Cursor / agy 九家通用。**
+**Claude Code / Codex / CodeBuddy / zcode / pi / Qoder / Gemini CLI / Cursor / agy /
+opencode / Factory droid / Crush 十二家通用。**
 
 **yolo 让你不用点 Yes；守卫让你敢开 yolo。**
 
 ## 和官方 yolo 的区别
 
-九家官方都有「免确认」姿态——Claude `--dangerously-skip-permissions`、
+十二家官方都有「免确认」姿态——Claude `--dangerously-skip-permissions`、
 Codex `--dangerously-bypass-approvals-and-sandbox`（俗称 yolo）、CodeBuddy `-y`、
 zcode `--mode yolo`、Qoder `--dangerously-skip-permissions`、
 Gemini CLI `--yolo`、Cursor 的自动执行模式、agy `--dangerously-skip-permissions`（turbo）、
+opencode `run --auto`、droid 的 `auto-*` 档、Crush `--yolo`、
 pi 干脆没有沙箱也不审批任何命令（等于一直 yolo）。
 它们**不看命令内容，一律放行**。
 
@@ -34,7 +36,7 @@ pi 干脆没有沙箱也不审批任何命令（等于一直 yolo）。
 官方 `permissions.deny` 只有命令前缀、`*` 还跨 `/` 匹配，做不到这种粒度。
 另外只匹配命令不匹配数据（`echo "rm -rf /"` 不拦），`eval` / `bash -c` 会补扫。
 
-九家共用同一套判定引擎（`core.py`）和规则库（`rules.py`，唯一真源），
+十二家共用同一套判定引擎（`core.py`）和规则库（`rules.py`，唯一真源），
 只是各家协议不同，由不同入口脚本翻译输出：
 
 | 客户端 | 拦截机制 | 入口 | 配置落点 |
@@ -48,6 +50,12 @@ pi 干脆没有沙箱也不审批任何命令（等于一直 yolo）。
 | Cursor | `hooks.json` 的 `beforeShellExecution` | `danger-guard-cursor.py` | `~/.cursor/hooks.json` |
 | pi | 扩展 `tool_call` 事件 | `bypass-yes-guard.ts` → `danger-guard-pi.py` | `~/.pi/agent/` |
 | agy（Antigravity CLI） | `hooks.json` 的 `PreToolUse` | `danger-guard-agy.py` | `~/.gemini/config/hooks.json` |
+| opencode | 插件的 `tool.execute.before` | `bypass-yes-opencode.js` → `danger-guard-pi.py` | `~/.config/opencode/plugin/` |
+| Factory droid ※ | PreToolUse hook（同 Claude 协议） | `danger-guard.py` | `~/.factory/hooks.json` |
+| Crush ※ | `crush.json` 的 `hooks.PreToolUse` | `danger-guard-crush.py` | `~/.config/crush/crush.json` |
+
+※ = 本机没装、**没端到端验证过**：协议按各自官方文档实现，回归测试也全绿，但「客户端到底有没有
+真调用钩子」没实测。真要用先拿下面的 canary 取证一次 —— agy 就是靠这一步才发现配置落点写错了。
 
 ---
 
@@ -56,7 +64,7 @@ pi 干脆没有沙箱也不审批任何命令（等于一直 yolo）。
 ```bash
 git clone https://github.com/zzusec/bypass-yes.git
 cd bypass-yes
-bash install-all.sh          # 九家一起装；只要守卫不要 yolo 用 --no-bypass
+bash install-all.sh          # 十二家一起装；只要守卫不要 yolo 用 --no-bypass
 ```
 
 装完**重启客户端**（pi 在会话里 `/reload` 热加载即可）；Codex 还要执行 `/hooks`
@@ -77,6 +85,9 @@ bash install-qoder.sh         # Qoder CLI
 bash install-gemini.sh        # Gemini CLI
 bash install-cursor.sh        # Cursor（Agent / cursor-agent）
 bash install-agy.sh           # agy（Antigravity CLI）
+bash install-opencode.sh      # opencode
+bash install-droid.sh         # Factory droid（未端到端验证）
+bash install-crush.sh         # Crush（未端到端验证）
 ```
 
 **验证**
@@ -102,11 +113,23 @@ echo '{"command":"rm -rf /","cwd":"/tmp"}' \
 # agy（输出 {"decision":"deny|force_ask", ...}）
 echo '{"toolCall":{"name":"run_command","args":{"CommandLine":"rm -rf /","Cwd":"/tmp"}}}' \
   | /usr/bin/python3 ~/.gemini/hooks/danger-guard-agy.py
+
+# opencode（插件调的是通用桥接，输出 {"level":"block|warn|safe", ...}）
+/usr/bin/python3 ~/.config/opencode/hooks/danger-guard-pi.py '{"command":"rm -rf /","cwd":"/tmp"}'
+
+# Factory droid（同 Claude 协议，工具名是 Execute）
+echo '{"tool_name":"Execute","tool_input":{"command":"rm -rf /"},"cwd":"/tmp"}' \
+  | /usr/bin/python3 ~/.factory/hooks/danger-guard.py
+
+# Crush（输出 {"decision":"deny", ...}，工具名是小写 bash）
+echo '{"tool_name":"bash","tool_input":{"command":"rm -rf /"},"cwd":"/tmp"}' \
+  | /usr/bin/python3 ~/.config/crush/hooks/danger-guard-crush.py
 ```
 
 回归测试：`bash test.sh`（Claude 系 102 条）、`bash test-codex.sh`（Codex 57 条）、
 `bash test-zcode.sh`（19 条）、`bash test-pi.sh`（23 条）、`bash test-qoder.sh`（18 条）、
-`bash test-gemini.sh`（16 条）、`bash test-cursor.sh`（16 条）、`bash test-agy.sh`（21 条）。
+`bash test-gemini.sh`（16 条）、`bash test-cursor.sh`（16 条）、`bash test-agy.sh`（21 条）、
+`bash test-opencode.sh`（19 条，需要 node）、`bash test-crush.sh`（19 条）、`bash test-droid.sh`（17 条）。
 
 **不确定钩子到底有没有被触发？挂 canary**
 
@@ -131,13 +154,14 @@ cat ~/.claude/hooks/guard-canary.log           # 跑几个命令后看这里有�
 
 | 想干嘛 | 怎么做 |
 |---|---|
-| 某类危险命令不想拦 | `echo '^\s*git\s+reset\s+--hard\b' >> ~/.claude/hooks/allowlist.txt`（九家共享） |
+| 某类危险命令不想拦 | `echo '^\s*git\s+reset\s+--hard\b' >> ~/.claude/hooks/allowlist.txt`（各家共享） |
 | 改危险命令清单 | 编辑 `~/.claude/hooks/rules.py`，重跑 install |
 | 提示被 TUI 盖住 | `rules.py` 里 `NOTIFY_CENTER = True`（通知中心横幅，不抢焦点） |
 | 关响铃 / 调音量 | `DANGER_GUARD_SILENT=1`；`core.py` 的 `SOUND_VOLUME` |
 | pi 换 Python 解释器 | 启动前 `export DANGER_GUARD_PY=/path/to/python3` |
 | Cursor 免确认模式 | 启动前 `export DANGER_GUARD_BYPASS=1`（WARN 从弹框改硬拒） |
 | agy turbo 模式 | 同上，`export DANGER_GUARD_BYPASS=1` |
+| opencode 换 Python 解释器 | 启动前 `export DANGER_GUARD_PY=/path/to/python3` |
 
 ---
 
@@ -167,6 +191,14 @@ cat ~/.claude/hooks/guard-canary.log           # 跑几个命令后看这里有�
   `export DANGER_GUARD_BYPASS=1`，`warn` 升硬拒。
   放行同样走「不输出」：实测空 stdout = 交还 agy 自己的审批，而输出一个没有 `decision`
   的 JSON 反而会被当成拦截。
+- **opencode**：插件的 `tool.execute.before` 只有「放行」和「抛错」两种结果，**没有确认框**，
+  所以 `warn` 和 `block` 一样硬拒（抛出的错误会原样显示并回给模型）。这一档与 `--auto` 无关，
+  开不开 auto 都拦得住。
+- **Factory droid**：协议与 Claude 一致，认 `ask`。它的 payload 直接带 `permission_mode`，
+  是 `auto-*`（auto-low / auto-medium / auto-high）时确认框弹不出来，守卫自动把 `warn` 升硬拒；
+  `off` / `spec` 下正常弹 `ask`。不用去猜配置文件。
+- **Crush**：`decision` 只有 `allow` / `deny` / `none`，**没有 ask**，所以 `warn` 一律硬拒
+  （它还有 `--yolo`，更不能赌用户没开）。
 - **非 bypass 模式**（Claude 默认、zcode / Qoder `--no-bypass`）：`warn` 正常弹 `ask`。
 
 ---
@@ -174,7 +206,7 @@ cat ~/.claude/hooks/guard-canary.log           # 跑几个命令后看这里有�
 ## 升级
 
 ```bash
-git pull && bash install-all.sh      # 或按需跑 install.sh / install-codex.sh / install-codebuddy.sh / install-zcode.sh / install-pi.sh / install-qoder.sh / install-gemini.sh / install-cursor.sh / install-agy.sh
+git pull && bash install-all.sh      # 或按需跑 install.sh / install-codex.sh / install-codebuddy.sh / install-zcode.sh / install-pi.sh / install-qoder.sh / install-gemini.sh / install-cursor.sh / install-agy.sh / install-opencode.sh / install-droid.sh / install-crush.sh
 ```
 
 脚本幂等，会先备份；`rules.py` 和 `core.py` 每次一起复制，不会出现「脚本新、规则旧」。
@@ -193,10 +225,22 @@ rm -rf ~/.gemini/hooks      # Gemini CLI + agy 共用这个目录:并删掉 sett
 rm -rf ~/.cursor/hooks      # 并删掉 hooks.json 里 beforeShellExecution 的条目
 rm -rf ~/.pi/agent/hooks ~/.pi/agent/extensions/bypass-yes-guard.ts   # pi 扩展 + 桥接
 rm -rf ~/.codex/hooks ~/.codex/rules/danger-guard.rules   # 并删掉 hooks.json 里的条目
+rm -rf ~/.config/opencode/hooks ~/.config/opencode/plugin/bypass-yes-opencode.js   # opencode 插件 + 桥接
+rm -rf ~/.factory/hooks     # 并删掉 hooks.json 里 PreToolUse 的 danger-guard 条目
+rm -rf ~/.config/crush/hooks   # 并删掉 crush.json 里 hooks.PreToolUse 的 bypass-yes 条目
 ```
 
 install 每次都留 `*.bak.cmdguard` 备份，拷回去即可还原（含 `defaultMode`、`permission.mode`、
 `sandbox` 等设置）。
+
+---
+
+## 暂时接不了的
+
+- **aider**：没有钩子系统。上游 [issue #5712](https://github.com/Aider-AI/aider/issues/5712)
+  还在讨论加 hook，目前没有任何「命令执行前」的拦截点，只能靠包一层 shell —— 那已经不是本项目的活了。
+- **Amp**：官方手册里没有 PreToolUse 一类的钩子，只有 `settings.json` / MCP / `AGENT.md`。
+  等它出了钩子再说。
 
 ---
 

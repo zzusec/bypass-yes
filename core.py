@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""危险命令判定引擎 —— Claude Code / Codex / CodeBuddy / zcode / pi / Qoder / Gemini / Cursor / agy 九家共用。
+"""危险命令判定引擎 —— 十二家共用:Claude Code / Codex / CodeBuddy / zcode / pi / Qoder /
+Gemini / Cursor / agy / opencode / Factory droid / Crush。
 
 规则表在 rules.py(唯一真源)。本文件只做「命令文本 → 危险等级」,不关心任何一家的
 输出协议 —— 输出由各客户端的入口脚本负责:
@@ -9,6 +10,10 @@
     danger-guard-pi.py     pi(被 command-guard.ts 扩展调用,输出 {level,reason})
     danger-guard-gemini.py Gemini CLI(BeforeTool,decision deny/allow)
     danger-guard-cursor.py Cursor(hooks.json 的 beforeShellExecution,permission deny/ask)
+    danger-guard-agy.py    agy / Antigravity CLI(PreToolUse,decision deny/force_ask)
+    danger-guard-crush.py  Crush(hooks.PreToolUse,decision deny;没有 ask)
+    bypass-yes-opencode.js opencode(插件 tool.execute.before,复用 danger-guard-pi.py 桥接)
+    danger-guard.py        Factory droid 也走这个(同 Claude 协议,工具名 Execute)
 
     classify(cmd, cwd) -> (level, reason)
 
@@ -28,10 +33,10 @@ import subprocess
 import rules
 
 # 各家对 shell 工具的命名:Claude/CodeBuddy/zcode/Qoder 用 Bash,Codex 用 shell / local_shell,
-# Gemini CLI 用 run_shell_command。
-# pi 的小写 bash 由 command-guard.ts 扩展自行过滤、Cursor 的 beforeShellExecution
-# 事件不带工具名(直接给 command),两者都不走这里。
-TOOL_NAMES = ("Bash", "shell", "local_shell", "run_shell_command")
+# Gemini CLI 用 run_shell_command,Factory droid 用 Execute。
+# pi / opencode / Crush 的小写 bash 由各自入口自行过滤、agy 的 run_command 同理、
+# Cursor 的 beforeShellExecution 事件不带工具名(直接给 command),都不走这里。
+TOOL_NAMES = ("Bash", "shell", "local_shell", "run_shell_command", "Execute")
 
 SOUND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chime.wav")
 SOUND_VOLUME = "0.5"  # afplay 相对系统音量的比例(0~1)
@@ -132,7 +137,7 @@ def build_scan_text(cmd):
 # ============================================================
 
 def allowlist_paths():
-    """白名单文件:脚本同目录的 allowlist.txt,以及 Claude 侧那份(九家共享放行规则)。"""
+    """白名单文件:脚本同目录的 allowlist.txt,以及 Claude 侧那份(各家共享放行规则)。"""
     here = os.path.dirname(os.path.abspath(__file__))
     return [
         os.path.join(here, "allowlist.txt"),

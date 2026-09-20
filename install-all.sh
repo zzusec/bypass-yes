@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# 九家一起装:Claude Code + Codex CLI + CodeBuddy + zcode + pi + Qoder + Gemini CLI + Cursor + agy
+# 十二家一起装:Claude Code + Codex CLI + CodeBuddy + zcode + pi + Qoder + Gemini CLI +
+# Cursor + agy + opencode + Factory droid + Crush
 #
-# 等价于依次跑各个 install-*.sh,只是不用敲九遍。各脚本都是幂等的,重复跑只会刷新到最新。
+# 等价于依次跑各个 install-*.sh,只是不用敲十二遍。各脚本都是幂等的,重复跑只会刷新到最新。
 #
 # 用法:
-#   bash install-all.sh               # 九家都装,能设免确认的都设上(bypass/yolo)
+#   bash install-all.sh               # 十二家都装,能设免确认的都设上(bypass/yolo)
 #   bash install-all.sh --no-bypass   # 只装守卫,不动权限模式
 set -euo pipefail
 
@@ -19,34 +20,43 @@ case "$ARG" in
     ;;
 esac
 
-echo "===== 1/9 Claude Code ====="
+echo "===== 1/12 Claude Code ====="
 bash "${SRC_DIR}/install.sh" "$ARG"
 echo
-echo "===== 2/9 Codex CLI ====="
+echo "===== 2/12 Codex CLI ====="
 bash "${SRC_DIR}/install-codex.sh"
 echo
-echo "===== 3/9 CodeBuddy Code ====="
+echo "===== 3/12 CodeBuddy Code ====="
 bash "${SRC_DIR}/install-codebuddy.sh" "$ARG"
 echo
-echo "===== 4/9 zcode ====="
+echo "===== 4/12 zcode ====="
 bash "${SRC_DIR}/install-zcode.sh" "$ARG"
 echo
-echo "===== 5/9 pi ====="
+echo "===== 5/12 pi ====="
 bash "${SRC_DIR}/install-pi.sh"
 echo
-echo "===== 6/9 Qoder CLI ====="
+echo "===== 6/12 Qoder CLI ====="
 bash "${SRC_DIR}/install-qoder.sh" "$ARG"
 echo
-echo "===== 7/9 Gemini CLI ====="
+echo "===== 7/12 Gemini CLI ====="
 bash "${SRC_DIR}/install-gemini.sh"
 echo
-echo "===== 8/9 Cursor ====="
+echo "===== 8/12 Cursor ====="
 bash "${SRC_DIR}/install-cursor.sh"
 echo
-echo "===== 9/9 agy(Antigravity CLI)====="
+echo "===== 9/12 agy(Antigravity CLI)====="
 bash "${SRC_DIR}/install-agy.sh"
 echo
-echo "九家都装好了。"
+echo "===== 10/12 opencode ====="
+bash "${SRC_DIR}/install-opencode.sh"
+echo
+echo "===== 11/12 Factory droid ====="
+bash "${SRC_DIR}/install-droid.sh"
+echo
+echo "===== 12/12 Crush ====="
+bash "${SRC_DIR}/install-crush.sh"
+echo
+echo "十二家都装好了。"
 echo
 echo "接下来:"
 echo "  1) 重启客户端(权限模式改动要重启才生效);pi 在会话里 /reload 热加载即可"
@@ -54,3 +64,4 @@ echo "  2) Codex 还要在会话里执行 /hooks,把 PreToolUse、PermissionRequ
 echo "     两条 danger-guard Trust 一次 —— 没 Trust 时钩子会静默不执行"
 echo "  3) Gemini CLI 的 yolo 只能在命令行给:gemini --yolo(settings.json 里配不了)"
 echo "  4) agy 的 turbo 同理只能命令行给:agy --dangerously-skip-permissions"
+echo "  5) droid 与 Crush 本机没端到端验证过 —— 真用的话先拿 danger-guard-canary.sh 取证"

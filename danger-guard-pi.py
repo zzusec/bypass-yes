@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""pi 桥接入口 —— 被 ~/.pi/agent/extensions/command-guard.ts 调用。
+"""通用桥接入口 —— 被 pi 扩展(~/.pi/agent/extensions/)和 opencode 插件共同调用。
+
+名字带 -pi 是历史原因:它其实与客户端无关,给它 {command, cwd},还你 {level, reason}。
 
 pi 没有 Claude 那种「命令行 hook」,它的拦截点是 TypeScript 扩展的 tool_call 事件。
-扩展不方便内嵌整套规则,所以由它在 bash 工具执行前调用本脚本,拿回分级结果再决定
-放行 / 弹确认框 / 硬拦截。判定逻辑仍在 core.py,规则仍在 rules.py —— 九家同一份真源。
+扩展/插件不方便内嵌整套规则,所以由它在 bash 工具执行前调用本脚本,拿回分级结果再决定
+放行 / 弹确认框 / 硬拦截(opencode 那边没有确认框可用,warn 和 block 一样抛错拦下)。
+判定逻辑仍在 core.py,规则仍在 rules.py —— 各家同一份真源。
 
 调用约定(pi.exec 没有 stdin,所以走 argv):
     python3 danger-guard-pi.py '<json>'

@@ -123,4 +123,4 @@ echo "  echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf /\"}}
 echo
 echo "注意:zcode 的 yolo 下 hook 的 deny 永远生效(运行时实测),守卫拦得住;"
 echo "      本项目把 zcode 当 bypass 处理,git reset --hard / rm -rf 整个项目 等 WARN 一律硬拒,"
-echo "      想放行某类命令就写进 ~/.claude/hooks/allowlist.txt(九家共享)。"
+echo "      想放行某类命令就写进 ~/.claude/hooks/allowlist.txt(各家共享)。"
