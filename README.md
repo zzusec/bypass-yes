@@ -101,6 +101,25 @@ echo '{"command":"rm -rf /","cwd":"/tmp"}' \
 `bash test-zcode.sh`（19 条）、`bash test-pi.sh`（23 条）、`bash test-qoder.sh`（18 条）、
 `bash test-gemini.sh`（16 条）、`bash test-cursor.sh`（16 条）。
 
+**不确定钩子到底有没有被触发？挂 canary**
+
+上面那些命令验证的是「守卫脚本自己判得对不对」，验证不了「客户端有没有真的调用它」。
+`danger-guard-canary.sh` 就是干这个的：记一行日志（时间 / 判定 / 命令），然后把判定原样
+交给同目录的守卫入口 —— 行为和没挂时一致，只是多了证据。
+
+```bash
+cp danger-guard-canary.sh ~/.claude/hooks/     # 拷到该家的 hooks 目录
+# 把配置里 PreToolUse 的 hook 命令改成 canary 的绝对路径(重跑 install-*.sh 会改回来)
+cat ~/.claude/hooks/guard-canary.log           # 跑几个命令后看这里有没有记录
+```
+
+日志形如 `2026-09-19 22:23:36	deny	git reset --hard`。空文件 = 一次都没被调用，
+那就是配置没接上或 matcher 没匹配上，不是守卫的问题。脚本自动适配各家（入口文件名、
+判定键名、命令字段都不同），拷过去就能用。
+
+> ⚠ canary 是 **fail-open** 的：它自己挂掉时命令会照常执行、只是没有守卫。
+> 所以只作临时取证，拿到证据就拆：删掉 canary 和日志，重跑 install，hook 命令会改回直连 python。
+
 **可选调整**
 
 | 想干嘛 | 怎么做 |
