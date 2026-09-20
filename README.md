@@ -15,7 +15,8 @@ opencode `run --auto`、droid 的 `auto-*` 档、Crush `--yolo`、Copilot CLI `-
 pi 干脆没有沙箱也不审批任何命令（等于一直 yolo）。
 它们**不看命令内容，一律放行**。
 
-守卫不是替代品，是**叠在 yolo 上面的一层**（install 会把 yolo 一起开好）：
+守卫不是替代品，是**叠在 yolo 上面的一层**（能在配置文件里设免确认的，install 会一并开好；
+Gemini CLI / agy / opencode / Crush / Copilot CLI 的 yolo 只能命令行给，install 不碰）：
 
 | | 只开官方 yolo | 装上守卫 |
 |---|---|---|
@@ -53,10 +54,12 @@ pi 干脆没有沙箱也不审批任何命令（等于一直 yolo）。
 | opencode | 插件的 `tool.execute.before` | `bypass-yes-opencode.js` → `danger-guard-pi.py` | `~/.config/opencode/plugin/` |
 | Factory droid ※ | PreToolUse hook（同 Claude 协议） | `danger-guard.py` | `~/.factory/hooks.json` |
 | Crush ※ | `crush.json` 的 `hooks.PreToolUse` | `danger-guard-crush.py` | `~/.config/crush/crush.json` |
-| GitHub Copilot CLI ※ | `PreToolUse` hook | `danger-guard-copilot.py` | `~/.copilot/hooks/` |
+| GitHub Copilot CLI ※ | `PreToolUse` hook（PascalCase，走 VS Code 兼容格式） | `danger-guard-copilot.py` | `~/.copilot/hooks/` |
 
-※ = 本机没装、**没端到端验证过**：协议按各自官方文档实现，回归测试也全绿，但「客户端到底有没有
-真调用钩子」没实测。真要用先拿下面的 canary 取证一次 —— agy 就是靠这一步才发现配置落点写错了。
+※ = **没在真实客户端里端到端验证过**（作者机器上没装这三家）：协议按各自官方文档实现、回归测试也
+全绿，但「客户端到底有没有真调用钩子」没实测。真要用先拿下面的 canary 取证一次 —— agy 当初就是靠
+这一步才发现配置落点写错了（配置写在 `~/.gemini/hooks.json`，`/hooks` 列得出来、日志也写 loaded，
+就是不执行）。跑通了欢迎提 issue 让我把 ※ 去掉。
 
 ---
 
@@ -71,8 +74,9 @@ bash install-all.sh          # 十三家一起装；只要守卫不要 yolo 用 
 装完**重启客户端**（pi 在会话里 `/reload` 热加载即可）；Codex 还要执行 `/hooks`
 把两条 danger-guard **Trust** 一次，否则钩子静默不执行
 （只需第一次——之后重装是就地更新，不会让 Trust 失效）。
-Gemini CLI 的 yolo 只能命令行给（`settings.json` 里没有这一档）：`gemini --yolo`；
-agy 的 turbo 同理：`agy --dangerously-skip-permissions`。
+opencode 的插件在下次启动时加载。yolo 只能命令行给的几家：`gemini --yolo`、
+`agy --dangerously-skip-permissions`、`opencode run --auto`、`crush --yolo`、
+`copilot --allow-all-tools`（`settings.json` 里都没有对应开关）。
 
 只装某一个就跑对应的脚本（各家配置落点不同）：
 
@@ -132,11 +136,19 @@ echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"},"cwd":"/tmp"}' \
   | /usr/bin/python3 ~/.copilot/hooks/danger-guard-copilot.py
 ```
 
-回归测试：`bash test.sh`（Claude 系 102 条）、`bash test-codex.sh`（Codex 57 条）、
-`bash test-zcode.sh`（19 条）、`bash test-pi.sh`（23 条）、`bash test-qoder.sh`（18 条）、
-`bash test-gemini.sh`（16 条）、`bash test-cursor.sh`（16 条）、`bash test-agy.sh`（21 条）、
-`bash test-opencode.sh`（19 条，需要 node）、`bash test-crush.sh`（19 条）、`bash test-droid.sh`（17 条）、
-`bash test-copilot.sh`（26 条）。
+回归测试（13 个脚本，共 368 条，各自独立可跑）：
+
+```bash
+for t in test.sh test-codex.sh test-codebuddy.sh test-zcode.sh test-pi.sh test-qoder.sh \
+         test-gemini.sh test-cursor.sh test-agy.sh test-opencode.sh test-crush.sh \
+         test-droid.sh test-copilot.sh; do printf '%-20s ' "$t"; bash "$t" | tail -1; done
+```
+
+`test.sh` 102 条（Claude 系判定引擎，规则改动主要看这个）、`test-codex.sh` 57 条、
+`test-codebuddy.sh` 15 条、`test-zcode.sh` 19 条、`test-pi.sh` 23 条、`test-qoder.sh` 18 条、
+`test-gemini.sh` 16 条、`test-cursor.sh` 16 条、`test-agy.sh` 21 条、
+`test-opencode.sh` 19 条（需要 node）、`test-crush.sh` 19 条、`test-droid.sh` 17 条、
+`test-copilot.sh` 26 条。各家的 test 都在临时目录里真跑一遍对应的 install，不会碰你的真实配置。
 
 **不确定钩子到底有没有被触发？挂 canary**
 
@@ -165,11 +177,8 @@ cat ~/.claude/hooks/guard-canary.log           # 跑几个命令后看这里有�
 | 改危险命令清单 | 编辑 `~/.claude/hooks/rules.py`，重跑 install |
 | 提示被 TUI 盖住 | `rules.py` 里 `NOTIFY_CENTER = True`（通知中心横幅，不抢焦点） |
 | 关响铃 / 调音量 | `DANGER_GUARD_SILENT=1`；`core.py` 的 `SOUND_VOLUME` |
-| pi 换 Python 解释器 | 启动前 `export DANGER_GUARD_PY=/path/to/python3` |
-| Cursor 免确认模式 | 启动前 `export DANGER_GUARD_BYPASS=1`（WARN 从弹框改硬拒） |
-| agy turbo 模式 | 同上，`export DANGER_GUARD_BYPASS=1` |
-| Copilot `--allow-all-tools` | 同上，`export DANGER_GUARD_BYPASS=1` |
-| opencode 换 Python 解释器 | 启动前 `export DANGER_GUARD_PY=/path/to/python3` |
+| pi / opencode 换 Python 解释器 | 启动前 `export DANGER_GUARD_PY=/path/to/python3` |
+| 免确认模式吞掉了确认框<br>（Cursor 自动执行、agy turbo、Copilot `--allow-all-tools`） | 启动前 `export DANGER_GUARD_BYPASS=1`（WARN 从弹框改硬拒） |
 
 ---
 
@@ -240,7 +249,8 @@ rm -rf ~/.codex/hooks ~/.codex/rules/danger-guard.rules   # 并删掉 hooks.json
 rm -rf ~/.config/opencode/hooks ~/.config/opencode/plugin/bypass-yes-opencode.js   # opencode 插件 + 桥接
 rm -rf ~/.factory/hooks     # 并删掉 hooks.json 里 PreToolUse 的 danger-guard 条目
 rm -rf ~/.config/crush/hooks   # 并删掉 crush.json 里 hooks.PreToolUse 的 bypass-yes 条目
-rm -rf ~/.copilot/hooks/bypass-yes.json ~/.copilot/hooks/danger-guard-copilot.py   # Copilot CLI
+rm -rf ~/.copilot/hooks  # Copilot CLI:守卫把 bypass-yes.json + danger-guard-copilot.py + core.py
+                         # + rules.py + chime.wav 都放在这里;目录里若还有你自己的 *.json 就别整目录删
 ```
 
 install 每次都留 `*.bak.cmdguard` 备份，拷回去即可还原（含 `defaultMode`、`permission.mode`、

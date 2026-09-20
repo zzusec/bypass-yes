@@ -18,7 +18,7 @@
 #   bash install-opencode.sh
 set -euo pipefail
 
-OC_DIR="${OPENCODE_HOME:-${HOME}/.config/opencode}"
+OC_DIR="${OPENCODE_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/opencode}"
 PLUGIN_DIR="${OC_DIR}/plugin"
 HOOKS_DIR="${OC_DIR}/hooks"
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
