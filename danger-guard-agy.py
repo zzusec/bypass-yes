@@ -5,15 +5,19 @@
 判定逻辑在 core.py,规则在 rules.py —— 本文件只负责把等级翻译成 agy 协议:
   block → 响铃 + 命令行提示(core.notify_user)+ decision: deny
   warn  → 响铃 + decision: force_ask(交给 agy 弹确认框)
-  其余  → 不输出(静默放行,不替用户免掉 agy 自己的审批)
+  其余  → decision: allow(直接放行,不弹框)
 
 输入形状和别家都不一样:工具名叫 run_command,命令在 toolCall.args.CommandLine
 (注意 args 里的键是大驼峰,外层元数据才是小驼峰/protojson)。cwd 在 toolCall.args.Cwd,
 缺失时退到 workspacePaths[0] —— headless(-p)下 workspacePaths 实测可能是空数组。
 
-安全命令为什么「不输出」而不是 decision: allow:实测 agy 对空 stdout 是放行(走它自己的
-审批),而输出一个没有 decision 的 JSON(比如 {})会被当成拦截。所以静默既不越权放行、
-也不会误伤。
+安全命令为什么是 decision: allow 而不是「不输出」:空 stdout 确实是放行,但放的是
+「回到 agy 自己的审批」—— 安全命令照样弹确认框(2026-09-20 用户实测截图:一条
+普通 for 循环 + head + python3 也被要求确认)。而本项目的宗旨是 yolo 由守卫来给:
+安全命令回 allow → 一次都不弹;危险命令照样 deny 拦死。
+连带好处是不必再开 turbo(--dangerously-skip-permissions) —— 那个开关是全量放行,
+连 rm -rf / 都一起放,守卫就白装了。
+注意:输出一个没有 decision 的 JSON(比如 {})会被当成拦截,别图省事乱打印。
 
 warn 为什么用 force_ask 不用 ask:agy 的 ask 会命中「Always Allow」缓存 ——
 用户只要对某条 git reset --hard 点过一次「总是允许」,以后守卫就形同虚设。
@@ -67,7 +71,8 @@ def main():
     elif level == "warn":
         core.play_sound()
         emit("force_ask", reason)
-    # allowlist / safe:静默,由 agy 自己的审批决定
+    else:
+        emit("allow", "安全命令")  # allowlist / safe:这就是 yolo,见文件头说明
 
 
 if __name__ == "__main__":

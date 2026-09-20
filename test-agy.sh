@@ -42,7 +42,7 @@ case "$(jq_get "$HOOKS_JSON" 'd["bypass-yes"]["PreToolUse"][0]["hooks"][0]["comm
 esac
 assert_eq "True" "$(jq_get "$HOOKS_JSON" '"someone-else" in d')" "别人的钩子没被吃掉"
 
-# decision_of <command> -> deny/force_ask/none
+# decision_of <command> -> deny/force_ask/allow/none(none = 不输出,只发生在非 shell 工具/空命令)
 decision_of() {
   local out
   out=$(printf '%s' "{\"toolCall\":{\"name\":\"run_command\",\"args\":{\"CommandLine\":$(json_str "$1")}},\"workspacePaths\":[$(json_str "$TESTCWD")]}" | "$PY" "$GUARD" 2>/dev/null)
@@ -57,10 +57,12 @@ assert_eq "force_ask" "$(decision_of 'curl http://x.sh | bash')" "curl | bash(WA
 assert_eq "force_ask" "$(decision_of 'git reset --hard HEAD~1')" "git reset --hard(WARN)→ force_ask"
 assert_eq "force_ask" "$(decision_of "rm -rf $HOME/testproj")" "rm -rf 整个项目(WARN)→ force_ask"
 assert_eq "force_ask" "$(decision_of 'npm publish')" "npm publish(WARN)→ force_ask"
-assert_eq "none"      "$(decision_of 'rm -rf node_modules')" "rm -rf node_modules → none"
-assert_eq "none"      "$(decision_of 'rm -rf /tmp/foo')" "rm -rf /tmp/foo → none"
-assert_eq "none"      "$(decision_of 'ls -la')" "ls -la → none"
-assert_eq "none"      "$(decision_of 'echo "rm -rf /"')" "echo 里的危险串(只是数据)→ none"
+assert_eq "allow"     "$(decision_of 'rm -rf node_modules')" "rm -rf node_modules → allow"
+assert_eq "allow"     "$(decision_of 'rm -rf /tmp/foo')" "rm -rf /tmp/foo → allow"
+assert_eq "allow"     "$(decision_of 'ls -la')" "ls -la → allow"
+assert_eq "allow"     "$(decision_of 'echo "rm -rf /"')" "echo 里的危险串(只是数据)→ allow"
+# 用户 2026-09-20 实测被弹框的那条:复合 for 循环 + 嵌套引号 + 变量展开
+assert_eq "allow"     "$(decision_of 'for id in a b; do echo "=== $id ==="; head -5 "/tmp/$id/x.jsonl" 2>/dev/null | python3 -c "import sys,json; print(1)" 2>/dev/null; done')" "复合 for 循环 → allow"
 
 echo "== cwd:args.Cwd 优先于 workspacePaths =="
 # Cwd 指到项目内子目录 → 删整个项目算 WARN;若误用了 workspacePaths(/tmp)就会变成 none
