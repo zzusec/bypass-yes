@@ -7,3 +7,6 @@ settings.local.json
 .DS_Store
 __pycache__/
 *.pyc
+
+# 调试时顺手截的图,不进仓库
+.popup-screenshot.png
