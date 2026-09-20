@@ -16,7 +16,8 @@ pi 干脆没有沙箱也不审批任何命令（等于一直 yolo）。
 它们**不看命令内容，一律放行**。
 
 守卫不是替代品，是**叠在 yolo 上面的一层**（能在配置文件里设免确认的，install 会一并开好；
-Gemini CLI / agy / opencode / Crush / Copilot CLI 的 yolo 只能命令行给，install 不碰）：
+Gemini CLI / opencode / Crush / Copilot CLI 的 yolo 只能命令行给，install 不碰；
+agy 不用开 yolo——守卫直接回 `allow`，见下文）：
 
 | | 只开官方 yolo | 装上守卫 |
 |---|---|---|
@@ -50,11 +51,15 @@ Gemini CLI / agy / opencode / Crush / Copilot CLI 的 yolo 只能命令行给，
 | Gemini CLI | BeforeTool hook | `danger-guard-gemini.py` | `~/.gemini/settings.json` |
 | Cursor | `hooks.json` 的 `beforeShellExecution` | `danger-guard-cursor.py` | `~/.cursor/hooks.json` |
 | pi | 扩展 `tool_call` 事件 | `bypass-yes-guard.ts` → `danger-guard-pi.py` | `~/.pi/agent/` |
-| agy（Antigravity CLI） | `hooks.json` 的 `PreToolUse` | `danger-guard-agy.py` | `~/.gemini/config/hooks.json` |
+| agy（Antigravity CLI） | `hooks.json` 的 `PreToolUse` | `danger-guard-agy.py` | `~/.gemini/config/hooks.json` ⚠️ |
 | opencode | 插件的 `tool.execute.before` | `bypass-yes-opencode.js` → `danger-guard-pi.py` | `~/.config/opencode/plugin/` |
 | Factory droid ※ | PreToolUse hook（同 Claude 协议） | `danger-guard.py` | `~/.factory/hooks.json` |
 | Crush ※ | `crush.json` 的 `hooks.PreToolUse` | `danger-guard-crush.py` | `~/.config/crush/crush.json` |
 | GitHub Copilot CLI ※ | `PreToolUse` hook（PascalCase，走 VS Code 兼容格式） | `danger-guard-copilot.py` | `~/.copilot/hooks/` |
+
+⚠️ = agy 的落点只有 `~/.gemini/config/hooks.json` 这一个。另外两个位置都是坑：
+`~/.gemini/hooks.json` 在 `/hooks` 里列得出来、日志也写 loaded，但**实测根本不执行**；
+`~/.agents/hooks.json` 是**项目级**（cwd 下的 `.agents/`），只在 cwd 恰好是家目录时碰巧生效。
 
 ※ = **没在真实客户端里端到端验证过**（作者机器上没装这三家）：协议按各自官方文档实现、回归测试也
 全绿，但「客户端到底有没有真调用钩子」没实测。真要用先拿下面的 canary 取证一次 —— agy 当初就是靠
@@ -75,8 +80,9 @@ bash install-all.sh          # 十三家一起装；只要守卫不要 yolo 用 
 把两条 danger-guard **Trust** 一次，否则钩子静默不执行
 （只需第一次——之后重装是就地更新，不会让 Trust 失效）。
 opencode 的插件在下次启动时加载。yolo 只能命令行给的几家：`gemini --yolo`、
-`agy --dangerously-skip-permissions`、`opencode run --auto`、`crush --yolo`、
-`copilot --allow-all-tools`（`settings.json` 里都没有对应开关）。
+`opencode run --auto`、`crush --yolo`、`copilot --allow-all-tools`
+（`settings.json` 里都没有对应开关）。**agy 例外：别加 `--dangerously-skip-permissions`**，
+守卫对安全命令直接回 `allow`，本来就不弹框，加了反而把 `deny` 一起吞掉。
 
 只装某一个就跑对应的脚本（各家配置落点不同）：
 
@@ -116,7 +122,7 @@ echo '{"tool_name":"run_shell_command","tool_input":{"command":"rm -rf /"}}' \
 echo '{"command":"rm -rf /","cwd":"/tmp"}' \
   | /usr/bin/python3 ~/.cursor/hooks/danger-guard-cursor.py
 
-# agy（输出 {"decision":"deny|force_ask", ...}）
+# agy（输出 {"decision":"allow|deny|force_ask", ...}）
 echo '{"toolCall":{"name":"run_command","args":{"CommandLine":"rm -rf /","Cwd":"/tmp"}}}' \
   | /usr/bin/python3 ~/.gemini/hooks/danger-guard-agy.py
 
@@ -146,7 +152,7 @@ for t in test.sh test-codex.sh test-codebuddy.sh test-zcode.sh test-pi.sh test-q
 
 `test.sh` 102 条（Claude 系判定引擎，规则改动主要看这个）、`test-codex.sh` 57 条、
 `test-codebuddy.sh` 15 条、`test-zcode.sh` 19 条、`test-pi.sh` 23 条、`test-qoder.sh` 18 条、
-`test-gemini.sh` 16 条、`test-cursor.sh` 16 条、`test-agy.sh` 21 条、
+`test-gemini.sh` 16 条、`test-cursor.sh` 16 条、`test-agy.sh` 22 条、
 `test-opencode.sh` 19 条（需要 node）、`test-crush.sh` 19 条、`test-droid.sh` 17 条、
 `test-copilot.sh` 26 条。各家的 test 都在临时目录里真跑一遍对应的 install，不会碰你的真实配置。
 
@@ -178,7 +184,7 @@ cat ~/.claude/hooks/guard-canary.log           # 跑几个命令后看这里有�
 | 提示被 TUI 盖住 | `rules.py` 里 `NOTIFY_CENTER = True`（通知中心横幅，不抢焦点） |
 | 关响铃 / 调音量 | `DANGER_GUARD_SILENT=1`；`core.py` 的 `SOUND_VOLUME` |
 | pi / opencode 换 Python 解释器 | 启动前 `export DANGER_GUARD_PY=/path/to/python3` |
-| 免确认模式吞掉了确认框<br>（Cursor 自动执行、agy turbo、Copilot `--allow-all-tools`） | 启动前 `export DANGER_GUARD_BYPASS=1`（WARN 从弹框改硬拒） |
+| 免确认模式吞掉了确认框<br>（Cursor 自动执行、Copilot `--allow-all-tools`；agy 别开 turbo） | 启动前 `export DANGER_GUARD_BYPASS=1`（WARN 从弹框改硬拒） |
 
 ---
 
@@ -202,12 +208,13 @@ cat ~/.claude/hooks/guard-canary.log           # 跑几个命令后看这里有�
   `export DANGER_GUARD_BYPASS=1`，守卫会把 `warn` 升成硬拒。
 - **pi**：扩展能用 `ctx.ui.confirm` 弹**真确认框**，所以 `warn` 会响铃 + 弹框问你
   （按 y 才执行）；headless（`pi -p` / `--mode json`）弹不了框时**保守硬拦**，绝不静默放行。
-- **agy**：`PreToolUse` 认 `ask`，但守卫用的是 `force_ask`——`ask` 会命中 agy 的
-  「Always Allow」缓存，用户对某条 `git reset --hard` 点过一次「总是允许」守卫就形同虚设。
-  turbo（`--dangerously-skip-permissions`）下确认框会被吞，那种场景启动前
-  `export DANGER_GUARD_BYPASS=1`，`warn` 升硬拒。
-  放行同样走「不输出」：实测空 stdout = 交还 agy 自己的审批，而输出一个没有 `decision`
-  的 JSON 反而会被当成拦截。
+- **agy**：唯一一家**由守卫本身给 yolo** 的——安全命令回 `decision: allow`，agy 直接执行、
+  一次都不弹框，所以**不需要也不建议开 turbo**（`--dangerously-skip-permissions` 是全量放行，
+  连 `rm -rf /` 都一起放，还会把守卫的 `deny` 一起吞掉）。
+  早期版本放行走的是「不输出」，实测那等于交还 agy 自己的审批——**安全命令照样弹框**，
+  2026-09-20 就是这么翻的车。注意输出一个没有 `decision` 的 JSON 反而会被当成拦截。
+  `warn` 用 `force_ask` 不用 `ask`：`ask` 会命中 agy 的「Always Allow」缓存，
+  用户对某条 `git reset --hard` 点过一次「总是允许」，守卫就形同虚设。
 - **opencode**：插件的 `tool.execute.before` 只有「放行」和「抛错」两种结果，**没有确认框**，
   所以 `warn` 和 `block` 一样硬拒（抛出的错误会原样显示并回给模型）。这一档与 `--auto` 无关，
   开不开 auto 都拦得住。
