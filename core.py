@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""危险命令判定引擎 —— Claude Code / Codex / CodeBuddy 三家共用。
+"""危险命令判定引擎 —— Claude Code / Codex / CodeBuddy / zcode / pi 五家共用。
 
 规则表在 rules.py(唯一真源)。本文件只做「命令文本 → 危险等级」,不关心任何一家的
-输出协议 —— 输出由各客户端的入口脚本负责(danger-guard.py / danger-guard-codex.py)。
+输出协议 —— 输出由各客户端的入口脚本负责:
+    danger-guard.py        Claude Code / CodeBuddy / zcode(同一套 PreToolUse hook 协议)
+    danger-guard-codex.py  Codex CLI(hooks.json + .rules)
+    danger-guard-pi.py     pi(被 command-guard.ts 扩展调用,输出 {level,reason})
 
     classify(cmd, cwd) -> (level, reason)
 
@@ -22,7 +25,8 @@ import subprocess
 
 import rules
 
-# 三家对 shell 工具的命名:Claude/CodeBuddy 用 Bash,Codex 用 shell / local_shell
+# 各家对 shell 工具的命名:Claude/CodeBuddy/zcode 用 Bash,Codex 用 shell / local_shell。
+# pi 的小写 bash 由 command-guard.ts 扩展自行过滤,桥接脚本直接拿到命令文本,不走这里。
 TOOL_NAMES = ("Bash", "shell", "local_shell")
 
 SOUND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chime.wav")
@@ -124,7 +128,7 @@ def build_scan_text(cmd):
 # ============================================================
 
 def allowlist_paths():
-    """白名单文件:脚本同目录的 allowlist.txt,以及 Claude 侧那份(三家共享放行规则)。"""
+    """白名单文件:脚本同目录的 allowlist.txt,以及 Claude 侧那份(五家共享放行规则)。"""
     here = os.path.dirname(os.path.abspath(__file__))
     return [
         os.path.join(here, "allowlist.txt"),
@@ -522,13 +526,19 @@ def client_dir():
 
 
 def is_bypass_mode():
-    """客户端是否处在「不弹确认」的模式 —— 三种写法,同一个后果:
+    """客户端是否处在「不弹确认」的模式 —— 几种写法,同一个后果:
 
       Claude Code / CodeBuddy → settings.json 的 permissions.defaultMode == bypassPermissions
+      zcode                   → setting.json(单数)的 permission.mode == "yolo"
       Codex CLI               → config.toml 的 approval_policy == "never"
 
     这种模式下客户端会吞掉守卫的 ask(实测 git reset --hard 直接执行),
     所以 WARN 档没法确认,只能放行或拒绝。
+
+    zcode 略有不同:它的运行时代码显示 hook 的 deny 永远生效、ask 在 yolo 下也会升级成
+    真确认框。但本项目按既定策略把 zcode 一律当 bypass 处理 —— WARN 直接硬拒,行为可预期
+    (想放行某类命令就写进 allowlist.txt)。pi 不走这里:它没有「免确认模式」的概念,
+    桥接脚本以 bypass=False 调用 classify,把 warn 交给扩展的 ctx.ui.confirm 弹真确认框。
 
     测试可用 DANGER_GUARD_BYPASS=1/0 覆盖。
     """
@@ -537,10 +547,17 @@ def is_bypass_mode():
         return env not in ("0", "", "false")
     here = client_dir()
 
-    # Claude Code / CodeBuddy
+    # Claude Code / CodeBuddy:settings.json(复数)permissions.defaultMode
     try:
         with open(os.path.join(here, "settings.json"), encoding="utf-8") as f:
             return json.load(f).get("permissions", {}).get("defaultMode") == "bypassPermissions"
+    except Exception:
+        pass
+
+    # zcode:setting.json(单数)permission.mode == yolo
+    try:
+        with open(os.path.join(here, "setting.json"), encoding="utf-8") as f:
+            return json.load(f).get("permission", {}).get("mode") == "yolo"
     except Exception:
         pass
 

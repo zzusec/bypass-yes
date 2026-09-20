@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""危险命令规则库 —— Claude Code / Codex / CodeBuddy 三家共用的唯一真源。
+"""危险命令规则库 —— Claude Code / Codex / CodeBuddy / zcode / pi 五家共用的唯一真源。
 
-改这里就等于改三家:install.sh / install-codex.sh / gen_codex_rules.py 全部从本文件
-派生各自的产物(hook 判定、Codex 的 .rules、Claude 的静态 deny)。
+改这里就等于改五家:install.sh / install-codex.sh / install-codebuddy.sh /
+install-zcode.sh / install-pi.sh / gen_codex_rules.py 全部从本文件派生各自的产物
+(hook 判定、Codex 的 .rules、Claude 系的静态 deny)。
 
 判定分三档:
   BLOCK       不可逆毁灭 → 直接拒绝(deny)

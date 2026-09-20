@@ -16,6 +16,15 @@ SETTINGS="${CB_DIR}/settings.json"
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT_DST="${HOOKS_DIR}/danger-guard.py"
 
+BYPASS_MODE="yes"
+for arg in "$@"; do
+  case "$arg" in
+    --bypass|-y) BYPASS_MODE="yes" ;;
+    --no-bypass) BYPASS_MODE="no" ;;
+    *) echo "用法: bash install-codebuddy.sh [--bypass|--no-bypass]" >&2; exit 1 ;;
+  esac
+done
+
 echo "[1/3] 复制脚本、规则库与铃声 -> ${HOOKS_DIR}"
 mkdir -p "${HOOKS_DIR}"
 cp "${SRC_DIR}/danger-guard.py" "${SCRIPT_DST}"
@@ -27,10 +36,10 @@ else
 fi
 
 echo "[2/3] 合并 PreToolUse hook + 设 bypass 权限模式 -> ${SETTINGS}"
-/usr/bin/python3 - "$SETTINGS" "$SCRIPT_DST" "$SRC_DIR" <<'PY'
+/usr/bin/python3 - "$SETTINGS" "$SCRIPT_DST" "$SRC_DIR" "$BYPASS_MODE" <<'PY'
 import json, os, sys
 
-settings_path, script_dst, src_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+settings_path, script_dst, src_dir, bypass_mode = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 sys.path.insert(0, src_dir)
 import rules
 
@@ -63,19 +72,23 @@ pre[:] = [e for e in pre if not points_to_guard(e)]
 pre.insert(0, entry)          # 放最前,保证先于其它 hook 判定
 print("      已写入 PreToolUse hook")
 
-perm = data.setdefault("permissions", {})
-perm["defaultMode"] = "bypassPermissions"
+if bypass_mode == "yes":
+    perm = data.setdefault("permissions", {})
+    perm["defaultMode"] = "bypassPermissions"
 
-old = list(perm.get("deny") or [])
-kept = [x for x in old if x not in rules.CLAUDE_DENY_OVERBROAD]
-removed = [x for x in old if x in rules.CLAUDE_DENY_OVERBROAD]
-for x in rules.CLAUDE_DENY:
-    if x not in kept:
-        kept.append(x)
-perm["deny"] = kept
-print("      推荐 deny:", kept)
-if removed:
-    print("      已移除过宽 deny:", removed)
+    old = list(perm.get("deny") or [])
+    kept = [x for x in old if x not in rules.CLAUDE_DENY_OVERBROAD]
+    removed = [x for x in old if x in rules.CLAUDE_DENY_OVERBROAD]
+    for x in rules.CLAUDE_DENY:
+        if x not in kept:
+            kept.append(x)
+    perm["deny"] = kept
+    print("      已设置 permissions.defaultMode = bypassPermissions")
+    print("      推荐 deny:", kept)
+    if removed:
+        print("      已移除过宽 deny:", removed)
+else:
+    print("      已跳过权限模式设置(--no-bypass);WARN 会弹确认框。")
 
 with open(settings_path, "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
