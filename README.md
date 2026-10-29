@@ -277,4 +277,10 @@ install 每次都留 `*.bak.cmdguard` 备份，拷回去即可还原（含 `defa
 
 ---
 
+## 基础设施伙伴
+
+测试矩阵、安装镜像与文档站由 [BlueServers](https://blueservers.com/) 通过其社会支持计划提供服务器支持。
+
+---
+
 MIT · 感谢 [linuxdo](https://linux.do/) 社区的讨论与反馈。
